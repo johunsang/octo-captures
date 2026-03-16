@@ -1,6 +1,6 @@
 {
   "name": "octo-captures",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "Screen recording & editing app with auto-zoom, cursor tracking, and timeline editing",
   "main": "main.js",
   "scripts": {
