@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Octo Captures</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      overflow: hidden;
+      -webkit-app-region: drag;
+      user-select: none;
+    }
+    .titlebar {
+      height: 38px;
+      display: flex;
+      align-items: center;
+      padding-left: 80px;
+      font-size: 13px;
+      color: #888;
+      font-weight: 500;
+    }
+    .container {
+      -webkit-app-region: no-drag;
+      padding: 0 24px 24px;
+    }
+    h1 {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle { font-size: 12px; color: #666; margin-bottom: 16px; }
+    .source-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 220px;
+      overflow-y: auto;
+      margin-bottom: 16px;
+      padding-right: 4px;
+    }
+    .source-list::-webkit-scrollbar { width: 4px; }
+    .source-list::-webkit-scrollbar-track { background: transparent; }
+    .source-list::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+    .source-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 12px;
+      background: #16213e;
+      border: 2px solid transparent;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .source-item:hover { background: #1a2744; border-color: #333; }
+    .source-item.selected { border-color: #667eea; background: #1a2744; }
+    .source-item img {
+      width: 72px;
+      height: 40px;
+      object-fit: cover;
+      border-radius: 6px;
+      background: #000;
+    }
+    .source-name {
+      font-size: 12px;
+      font-weight: 500;
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .options {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 16px;
+      padding: 14px;
+      background: #16213e;
+      border-radius: 12px;
+    }
+    .options-title {
+      font-size: 11px;
+      color: #667eea;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    .option-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .option-label { font-size: 13px; display: flex; align-items: center; gap: 8px; }
+    .option-icon { font-size: 16px; }
+    .toggle {
+      position: relative; width: 40px; height: 22px;
+      appearance: none; background: #333; border-radius: 11px;
+      cursor: pointer; transition: background 0.2s; outline: none; border: none;
+    }
+    .toggle:checked { background: #667eea; }
+    .toggle::after {
+      content: ''; position: absolute; top: 3px; left: 3px;
+      width: 16px; height: 16px; background: white; border-radius: 50%;
+      transition: transform 0.2s;
+    }
+    .toggle:checked::after { transform: translateX(18px); }
+    .quality-select {
+      background: #0f0f23; color: #e0e0e0; border: 1px solid #333;
+      border-radius: 6px; padding: 4px 8px; font-size: 12px;
+      cursor: pointer; outline: none;
+    }
+    .controls { display: flex; gap: 10px; }
+    .btn {
+      flex: 1; padding: 12px; border: none; border-radius: 10px;
+      font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+    }
+    .btn-record {
+      background: linear-gradient(135deg, #667eea, #764ba2); color: white;
+    }
+    .btn-record:hover { opacity: 0.9; transform: scale(1.02); }
+    .btn-record:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+    .btn-stop {
+      background: linear-gradient(135deg, #e74c3c, #c0392b); color: white;
+      animation: pulse-border 2s infinite;
+    }
+    .btn-stop:hover { opacity: 0.9; }
+    .btn-refresh {
+      background: #16213e; color: #888; flex: 0 0 auto; padding: 12px 16px;
+    }
+    .btn-refresh:hover { color: #e0e0e0; }
+    .status {
+      text-align: center; margin-top: 12px; font-size: 12px;
+      color: #666; min-height: 18px;
+    }
+    .status.recording { color: #e74c3c; }
+    .recording-dot {
+      display: inline-block; width: 8px; height: 8px;
+      background: #e74c3c; border-radius: 50%;
+      margin-right: 6px; vertical-align: middle;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    @keyframes pulse-border { 0%,100%{box-shadow:0 0 0 0 rgba(231,76,60,0.4)} 50%{box-shadow:0 0 0 8px rgba(231,76,60,0)} }
+    .shortcut-hint {
+      text-align: center; margin-top: 8px; font-size: 11px; color: #444;
+    }
+    .shortcut-hint kbd {
+      background: #16213e; padding: 2px 6px; border-radius: 4px;
+      font-family: inherit; font-size: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="titlebar">Octo Captures</div>
+  <div class="container">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+      <img src="logo.svg" style="width:36px;height:36px;border-radius:8px;">
+      <h1>Octo Captures</h1>
+    </div>
+    <p class="subtitle">Screen Studio 스타일 화면 녹화 & 편집</p>
+
+    <div class="source-list" id="sourceList"></div>
+
+    <div class="options">
+      <div class="options-title">녹화 옵션</div>
+      <div class="option-row">
+        <label class="option-label"><span class="option-icon">🎤</span> 마이크 녹음</label>
+        <input type="checkbox" class="toggle" id="micToggle">
+      </div>
+      <div id="micSelectRow" style="display:none;margin-top:4px;">
+        <select class="quality-select" id="micSelect" style="width:100%;font-size:11px;"></select>
+      </div>
+      <div class="option-row">
+        <label class="option-label"><span class="option-icon">🖱️</span> 커서 추적</label>
+        <input type="checkbox" class="toggle" id="cursorToggle" checked>
+      </div>
+      <div class="option-row">
+        <label class="option-label"><span class="option-icon">🎬</span> 화질</label>
+        <select class="quality-select" id="qualitySelect">
+          <option value="4000000">보통 (4Mbps)</option>
+          <option value="8000000" selected>높음 (8Mbps)</option>
+          <option value="16000000">최고 (16Mbps)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn btn-refresh" id="refreshBtn" title="새로고침">↻</button>
+      <button class="btn btn-record" id="recordBtn" disabled>녹화 시작</button>
+    </div>
+
+    <div class="status" id="status"></div>
+    <div class="shortcut-hint"><kbd>⌘</kbd> + <kbd>⇧</kbd> + <kbd>R</kbd> 녹화 토글</div>
+  </div>
+
+  <script>
+    let selectedSourceId = null;
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    let isRecording = false;
+    let recordingTimer = null;
+    let recordingSeconds = 0;
+
+    const sourceList = document.getElementById('sourceList');
+    const recordBtn = document.getElementById('recordBtn');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const status = document.getElementById('status');
+    const micToggle = document.getElementById('micToggle');
+    const micSelect = document.getElementById('micSelect');
+    const micSelectRow = document.getElementById('micSelectRow');
+    const cursorToggle = document.getElementById('cursorToggle');
+    const qualitySelect = document.getElementById('qualitySelect');
+
+    // Mic toggle → show/hide mic selector and load devices
+    micToggle.addEventListener('change', async () => {
+      if (micToggle.checked) {
+        micSelectRow.style.display = 'block';
+        await loadMicDevices();
+      } else {
+        micSelectRow.style.display = 'none';
+      }
+    });
+
+    async function loadMicDevices() {
+      try {
+        // Need to request permission first to get device labels
+        const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        tempStream.getTracks().forEach(t => t.stop());
+
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const mics = devices.filter(d => d.kind === 'audioinput');
+        micSelect.innerHTML = '';
+        mics.forEach(mic => {
+          const opt = document.createElement('option');
+          opt.value = mic.deviceId;
+          opt.textContent = mic.label || `마이크 ${micSelect.length + 1}`;
+          micSelect.appendChild(opt);
+        });
+      } catch (e) {
+        console.warn('Failed to load mic devices:', e);
+        micSelect.innerHTML = '<option value="">마이크 접근 실패</option>';
+      }
+    }
+
+    async function loadSources() {
+      const sources = await window.electronAPI.getSources();
+      sourceList.innerHTML = '';
+      if (sources.length === 0) {
+        sourceList.innerHTML = `
+          <div style="text-align:center; padding:30px 10px; color:#666; font-size:13px; line-height:1.6;">
+            화면 녹화 권한이 필요합니다.<br>
+            <strong>시스템 설정 → 개인정보 보호 및 보안 → 화면 녹화</strong>에서<br>
+            앱을 허용 후 새로고침 해주세요.
+          </div>`;
+        return;
+      }
+      sources.forEach((source) => {
+        const item = document.createElement('div');
+        item.className = 'source-item';
+        item.innerHTML = `
+          <img src="${source.thumbnail}" alt="${source.name}">
+          <span class="source-name">${source.name}</span>
+        `;
+        item.addEventListener('click', () => {
+          document.querySelectorAll('.source-item').forEach(el => el.classList.remove('selected'));
+          item.classList.add('selected');
+          selectedSourceId = source.id;
+          recordBtn.disabled = false;
+        });
+        sourceList.appendChild(item);
+      });
+    }
+
+    async function startRecording() {
+      if (!selectedSourceId || isRecording) return;
+      // 즉시 상태 변경하여 중복 호출 방지
+      isRecording = true;
+      recordBtn.disabled = true;
+      recordBtn.className = 'btn btn-stop';
+      recordBtn.textContent = '준비 중...';
+      status.textContent = '녹화 준비 중...';
+      try {
+        // Screen stream
+        const screenStream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            mandatory: {
+              chromeMediaSource: 'desktop',
+              chromeMediaSourceId: selectedSourceId,
+            },
+          },
+        });
+
+        const tracks = [...screenStream.getVideoTracks()];
+
+        // Mic audio (optional)
+        let micStream = null;
+        let hasMic = false;
+        if (micToggle.checked) {
+          try {
+            micStream = await navigator.mediaDevices.getUserMedia({
+              audio: {
+                deviceId: micSelect.value ? { exact: micSelect.value } : undefined,
+                echoCancellation: true,
+                noiseSuppression: true,
+              },
+              video: false,
+            });
+            tracks.push(...micStream.getAudioTracks());
+            hasMic = true;
+          } catch (e) {
+            console.warn('Mic not available:', e);
+            status.textContent = '마이크 접근 실패, 영상만 녹화합니다';
+          }
+        }
+
+        const combinedStream = new MediaStream(tracks);
+        const bitrate = parseInt(qualitySelect.value);
+
+        // Choose mimeType based on whether audio is present
+        const mimeType = hasMic
+          ? 'video/webm;codecs=vp9,opus'
+          : 'video/webm;codecs=vp9';
+
+        console.log('Recording with mimeType:', mimeType, 'tracks:', tracks.length);
+
+        mediaRecorder = new MediaRecorder(combinedStream, {
+          mimeType,
+          videoBitsPerSecond: bitrate,
+        });
+
+        recordedChunks = [];
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) recordedChunks.push(e.data);
+        };
+
+        mediaRecorder.onerror = (e) => {
+          console.error('MediaRecorder error:', e);
+          status.textContent = '녹화 오류: ' + (e.error?.message || '알 수 없음');
+        };
+
+        mediaRecorder.onstop = async () => {
+          try {
+            screenStream.getTracks().forEach(t => t.stop());
+            if (micStream) micStream.getTracks().forEach(t => t.stop());
+            clearInterval(recordingTimer);
+
+            // Get cursor data
+            let cursorPositions = [];
+            if (cursorToggle.checked) {
+              const cursorPromise = new Promise(resolve => {
+                const handler = (data) => resolve(data);
+                window.electronAPI.onCursorData(handler);
+              });
+              window.electronAPI.stopCursorTracking();
+              // Wait max 3 seconds for cursor data
+              cursorPositions = await Promise.race([
+                cursorPromise,
+                new Promise(resolve => setTimeout(() => resolve([]), 3000))
+              ]);
+            }
+
+            status.className = 'status';
+            status.textContent = '저장 중...';
+
+            const blob = new Blob(recordedChunks, { type: 'video/webm' });
+            console.log('Recorded blob size:', blob.size);
+
+            if (blob.size < 100) {
+              status.textContent = '녹화 데이터가 비어있습니다';
+              return;
+            }
+
+            const buffer = await blob.arrayBuffer();
+            const filePath = await window.electronAPI.saveVideo(buffer);
+
+            status.textContent = '저장 완료! → ' + filePath.split('/').pop();
+            const recordingDuration = recordingSeconds;
+            window.electronAPI.openPreview({
+              filePath,
+              cursorPositions,
+              duration: recordingDuration,
+            });
+            recordBtn.disabled = false;
+            recordBtn.textContent = '녹화 시작';
+            setTimeout(() => { status.textContent = ''; }, 5000);
+          } catch (err) {
+            console.error('Stop recording error:', err);
+            status.textContent = '저장 실패: ' + err.message;
+            recordBtn.disabled = false;
+            recordBtn.textContent = '녹화 시작';
+          }
+        };
+
+        // Start cursor tracking (with optional cursor hiding)
+        if (cursorToggle.checked) {
+          window.electronAPI.startCursorTracking();
+        }
+
+        mediaRecorder.start(1000); // collect data every 1 second
+        recordingSeconds = 0;
+
+        recordBtn.disabled = false;
+        recordBtn.textContent = '⏹ 녹화 중지';
+        status.className = 'status recording';
+        updateTimer();
+        recordingTimer = setInterval(updateTimer, 1000);
+      } catch (err) {
+        console.error('Recording failed:', err);
+        // 실패 시 상태 복원
+        isRecording = false;
+        recordBtn.disabled = false;
+        recordBtn.className = 'btn btn-record';
+        recordBtn.textContent = '녹화 시작';
+        status.className = 'status';
+        status.textContent = '녹화 실패: ' + err.message;
+      }
+    }
+
+    function stopRecording() {
+      if (!isRecording) return;
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+      }
+      isRecording = false;
+      recordBtn.disabled = true;
+      recordBtn.className = 'btn btn-record';
+      recordBtn.textContent = '처리 중...';
+    }
+
+    function updateTimer() {
+      recordingSeconds++;
+      const min = Math.floor(recordingSeconds / 60).toString().padStart(2, '0');
+      const sec = (recordingSeconds % 60).toString().padStart(2, '0');
+      status.innerHTML = `<span class="recording-dot"></span>녹화 중 ${min}:${sec}`;
+    }
+
+    recordBtn.addEventListener('click', () => {
+      if (isRecording) stopRecording();
+      else startRecording();
+    });
+
+    refreshBtn.addEventListener('click', loadSources);
+
+    window.electronAPI.onToggleRecording(() => {
+      if (isRecording) stopRecording();
+      else if (selectedSourceId) startRecording();
+    });
+
+    loadSources();
+  </script>
+</body>
+</html>

@@ -1,0 +1,47 @@
+{
+  "name": "octo-captures",
+  "version": "1.0.0",
+  "description": "Screen recording & editing app with auto-zoom, cursor tracking, and timeline editing",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder --mac",
+    "build:dmg": "electron-builder --mac dmg",
+    "build:zip": "electron-builder --mac zip"
+  },
+  "author": "johunsang",
+  "license": "MIT",
+  "build": {
+    "appId": "com.johunsang.octo-captures",
+    "productName": "Octo Captures",
+    "mac": {
+      "category": "public.app-category.video",
+      "icon": "icon.icns",
+      "target": [
+        { "target": "dmg", "arch": ["universal"] },
+        { "target": "zip", "arch": ["universal"] }
+      ],
+      "identity": null
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "preview.html",
+      "logo.svg",
+      "icon.png",
+      "node_modules/gif.js/**/*"
+    ],
+    "directories": {
+      "output": "release"
+    }
+  },
+  "devDependencies": {
+    "electron": "^41.0.2",
+    "electron-builder": "^26.8.1"
+  },
+  "dependencies": {
+    "gif.js": "^0.2.0"
+  }
+}

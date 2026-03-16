@@ -1,0 +1,6 @@
+node_modules/
+release/
+dist/
+*.dmg
+icon.iconset/
+.DS_Store

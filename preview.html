@@ -1,0 +1,1895 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>Octo Captures - Editor</title>
+  <script src="./node_modules/gif.js/dist/gif.js"></script>
+  <style>
+    :root {
+      --bg: #1e1e2e; --bg2: #262640; --bg3: #2e2e52;
+      --surface: #33335a; --accent: #7c6ff5; --accent2: #a78bfa;
+      --text: #ececf0; --text2: #b0b0cc; --text3: #7878a0;
+      --border: #3a3a60; --red: #f06060; --green: #50d0a0;
+      --yellow: #ffd54f; --blue: #64b5f6;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+      background: var(--bg); color: var(--text);
+      overflow: hidden; font-size: 12px;
+      -webkit-app-region: drag;
+    }
+
+    /* ── Layout ── */
+    .titlebar {
+      height: 36px; display:flex; align-items:center;
+      padding-left:80px; font-size:12px; color:var(--text3);
+      border-bottom:1px solid var(--border);
+    }
+    .editor { -webkit-app-region:no-drag; display:flex; flex-direction:column; height:calc(100vh - 36px); }
+    .main { flex:1; display:flex; min-height:0; }
+
+    /* ── Left Tools ── */
+    .tools-panel {
+      width: 72px; background:var(--bg2); border-right:1px solid var(--border);
+      display:flex; flex-direction:column; align-items:center; padding:8px 0; gap:4px;
+    }
+    .tool-btn {
+      width:56px; padding:10px 0; border:none; background:none;
+      color:var(--text3); font-size:10px; cursor:pointer;
+      border-radius:8px; display:flex; flex-direction:column;
+      align-items:center; gap:4px; transition:all 0.15s;
+    }
+    .tool-btn:hover { background:var(--bg3); color:var(--text2); }
+    .tool-btn.active { background:var(--accent); color:white; }
+    .tool-icon { font-size:20px; }
+
+    /* ── Preview ── */
+    .preview-area {
+      flex:1; display:flex; align-items:center; justify-content:center;
+      background:#0d0d1a; padding:12px; min-width:0;
+    }
+    .canvas-box {
+      position:relative; border-radius:8px; overflow:hidden;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+    }
+    .canvas-box video { display:none; }
+    #renderCanvas { display:block; border-radius:8px; }
+
+    /* ── Right Properties ── */
+    .props-panel {
+      width:280px; min-width:240px; background:var(--bg2); border-left:1px solid var(--border);
+      overflow-y:auto; display:flex; flex-direction:column;
+    }
+    .props-panel::-webkit-scrollbar { width:4px; }
+    .props-panel::-webkit-scrollbar-thumb { background:var(--surface); border-radius:2px; }
+    .props-header {
+      padding:12px 14px; font-size:13px; font-weight:700;
+      border-bottom:1px solid var(--border); color:var(--accent2);
+    }
+    .prop-group { padding:12px 14px; border-bottom:1px solid var(--border); }
+    .prop-title { font-size:10px; color:var(--accent); font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px; }
+    .prop-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:7px; }
+    .prop-row:last-child { margin-bottom:0; }
+    .prop-label { font-size:11px; color:var(--text2); }
+    .prop-val { font-size:10px; color:var(--text3); width:30px; text-align:right; font-variant-numeric:tabular-nums; }
+    .prop-right { display:flex; align-items:center; gap:5px; flex:1; min-width:0; margin-left:8px; }
+    .sl {
+      -webkit-appearance:none; flex:1; min-width:60px; height:6px;
+      background:var(--surface); border-radius:3px; outline:none;
+    }
+    .sl::-webkit-slider-thumb {
+      -webkit-appearance:none; width:16px; height:16px;
+      border-radius:50%; background:var(--accent); cursor:pointer;
+      box-shadow:0 1px 4px rgba(0,0,0,0.3);
+    }
+    .sl::-webkit-slider-thumb:hover {
+      transform:scale(1.15); background:var(--accent2);
+    }
+    .tog {
+      position:relative; width:32px; height:17px; appearance:none;
+      background:var(--surface); border-radius:9px; cursor:pointer;
+      transition:background 0.2s; outline:none; border:none;
+    }
+    .tog:checked { background:var(--accent); }
+    .tog::after {
+      content:''; position:absolute; top:2px; left:2px;
+      width:13px; height:13px; background:white; border-radius:50%;
+      transition:transform 0.2s;
+    }
+    .tog:checked::after { transform:translateX(15px); }
+    .cpick { width:20px; height:20px; border:2px solid var(--surface); border-radius:5px; cursor:pointer; padding:0; background:none; }
+    .sel {
+      background:var(--bg); color:var(--text); border:1px solid var(--surface);
+      border-radius:4px; padding:3px 5px; font-size:10px; outline:none; cursor:pointer;
+    }
+    .inp {
+      background:var(--bg); border:1px solid var(--surface); border-radius:4px;
+      color:var(--text); padding:4px 7px; font-size:11px; outline:none; width:100%;
+      font-family:inherit;
+    }
+    .inp:focus { border-color:var(--accent); }
+    textarea.inp { resize:none; }
+    .btn { padding:5px 10px; border:none; border-radius:5px; font-size:11px; font-weight:600; cursor:pointer; transition:all 0.12s; }
+    .btn-a { background:var(--accent); color:white; }
+    .btn-a:hover { opacity:0.85; }
+    .btn-g { background:var(--surface); color:var(--text2); }
+    .btn-g:hover { color:white; }
+    .btn-row { display:flex; gap:4px; margin-top:6px; }
+
+    .bg-grid { display:flex; gap:4px; flex-wrap:wrap; }
+    .bg-sw {
+      width:28px; height:28px; border-radius:5px;
+      border:2px solid transparent; cursor:pointer; transition:all 0.1s;
+    }
+    .bg-sw:hover { border-color:var(--text3); }
+    .bg-sw.on { border-color:var(--accent); box-shadow:0 0 6px rgba(124,111,245,0.3); }
+
+    .export-btn {
+      width:100%; padding:10px; border:none; border-radius:8px;
+      font-size:13px; font-weight:700; cursor:pointer;
+      background:linear-gradient(135deg, var(--green), #00cec9);
+      color:white; transition:all 0.15s;
+    }
+    .export-btn:hover { opacity:0.9; }
+    .export-btn:disabled { opacity:0.4; cursor:not-allowed; }
+    .export-status { font-size:10px; color:var(--text3); text-align:center; margin-top:6px; min-height:14px; }
+
+    /* ── Action Bar (CapCut-style) ── */
+    .action-bar {
+      display:flex; align-items:center; gap:2px; padding:4px 10px;
+      background:var(--bg); border-top:1px solid var(--border); flex-shrink:0;
+      overflow-x:auto;
+    }
+    .action-bar::-webkit-scrollbar { height:0; }
+    .act-btn {
+      display:flex; flex-direction:column; align-items:center; gap:2px;
+      padding:6px 10px; border:none; background:none; color:var(--text3);
+      font-size:9px; cursor:pointer; border-radius:6px; transition:all 0.12s;
+      white-space:nowrap; min-width:48px;
+    }
+    .act-btn:hover { background:var(--bg3); color:var(--text); }
+    .act-btn.active { background:var(--accent); color:white; }
+    .act-btn .act-icon { font-size:16px; line-height:1; }
+    .act-sep { width:1px; height:28px; background:var(--border); margin:0 4px; flex-shrink:0; }
+
+    /* ── Bottom Timeline ── */
+    .timeline-section {
+      height:200px; background:var(--bg2); border-top:1px solid var(--border);
+      display:flex; flex-direction:column; flex-shrink:0;
+    }
+
+    /* Ruler */
+    .tl-ruler {
+      height:28px; position:relative; margin-left:56px;
+      background:var(--bg); border-bottom:1px solid var(--border);
+      overflow:hidden; cursor:col-resize; flex-shrink:0;
+      user-select:none;
+    }
+    .tl-ruler-tick {
+      position:absolute; top:0; height:100%;
+      border-left:1px solid rgba(255,255,255,0.08);
+    }
+    .tl-ruler-tick.major { border-left-color:rgba(255,255,255,0.18); }
+    .tl-ruler-label {
+      position:absolute; top:4px; font-size:8px; color:var(--text3);
+      font-variant-numeric:tabular-nums; transform:translateX(3px);
+      pointer-events:none; white-space:nowrap;
+    }
+    /* Ruler range selection */
+    .tl-ruler-sel {
+      position:absolute; top:0; height:100%;
+      background:rgba(124,111,245,0.25);
+      border-left:2px solid var(--accent); border-right:2px solid var(--accent);
+      z-index:5; pointer-events:none;
+    }
+    .tl-ruler-sel-label {
+      position:absolute; bottom:2px; left:50%; transform:translateX(-50%);
+      font-size:8px; color:var(--accent2); font-weight:700;
+      pointer-events:none; white-space:nowrap;
+      text-shadow:0 0 4px rgba(0,0,0,0.8);
+    }
+    /* Range action popup */
+    .ruler-popup {
+      position:absolute; z-index:40; background:var(--bg);
+      border:1px solid var(--accent); border-radius:8px;
+      padding:6px; box-shadow:0 4px 16px rgba(0,0,0,0.5);
+      display:none; gap:4px;
+    }
+    .ruler-popup.show { display:flex; }
+    .ruler-popup .act-btn { padding:5px 8px; font-size:10px; min-width:auto; }
+
+    /* Toolbar */
+    .tl-toolbar {
+      display:flex; align-items:center; gap:8px;
+      padding:6px 10px; border-bottom:1px solid var(--border);
+      background: var(--bg);
+    }
+    .play-btn {
+      width:26px; height:26px; border:none; background:var(--accent);
+      color:white; border-radius:50%; cursor:pointer; font-size:11px;
+      display:flex; align-items:center; justify-content:center;
+    }
+    .play-btn:hover { opacity:0.85; }
+    .tc {
+      font-size:11px; color:var(--text2); font-variant-numeric:tabular-nums;
+      background:var(--bg2); padding:2px 8px; border-radius:4px; font-weight:500;
+    }
+    .speed-btn {
+      background:var(--bg2); border:none; color:var(--text3);
+      padding:2px 7px; border-radius:4px; font-size:10px; cursor:pointer; font-weight:600;
+    }
+    .speed-btn:hover { color:var(--text); }
+    .tl-spacer { flex:1; }
+    .tl-hint { font-size:10px; color:var(--text3); }
+    .tl-hint kbd { background:var(--surface); padding:1px 4px; border-radius:3px; font-size:9px; font-family:inherit; }
+
+    /* Tracks */
+    .tl-tracks {
+      flex:1; overflow:hidden; position:relative; cursor:pointer;
+    }
+    .tl-track {
+      height:40px; display:flex; border-bottom:1px solid rgba(255,255,255,0.04);
+      position:relative;
+    }
+    .tl-track-label {
+      width:56px; font-size:9px; color:var(--text3); text-align:center;
+      background:var(--bg); display:flex; align-items:center;
+      justify-content:center; border-right:1px solid rgba(255,255,255,0.04);
+      font-weight:600; text-transform:uppercase; letter-spacing:0.3px; flex-shrink:0;
+    }
+    .tl-track-content { flex:1; position:relative; }
+
+    /* Playhead */
+    .tl-playhead {
+      position:absolute; top:0; width:2px; height:100%;
+      background:var(--accent); z-index:20;
+      box-shadow:0 0 8px var(--accent); pointer-events:auto;
+      cursor:col-resize;
+    }
+    .tl-playhead::before {
+      content:''; position:absolute; top:-3px; left:-7px;
+      width:16px; height:10px; background:var(--accent);
+      border-radius:0 0 4px 4px;
+      cursor:col-resize;
+    }
+    /* Wider grab area for playhead */
+    .tl-playhead::after {
+      content:''; position:absolute; top:0; left:-8px;
+      width:18px; height:100%;
+    }
+
+    /* Video clip */
+    .tl-clip {
+      position:absolute; top:4px; bottom:4px; left:0; right:0;
+      background:linear-gradient(90deg, rgba(124,111,245,0.15), rgba(167,139,250,0.15));
+      border:1px solid rgba(124,111,245,0.3); border-radius:4px;
+    }
+
+    /* Trim handles */
+    .tl-trim-dim { position:absolute; top:0; height:100%; background:rgba(0,0,0,0.5); z-index:5; }
+    .tl-trim-dim.left { left:0; }
+    .tl-trim-dim.right { right:0; }
+    .tl-trim-h {
+      position:absolute; top:0; width:8px; height:100%; cursor:ew-resize; z-index:8;
+    }
+    .tl-trim-h::after {
+      content:''; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+      width:2px; height:14px; background:var(--accent); border-radius:1px;
+    }
+    .tl-trim-h:hover::after { background:white; }
+
+    /* Subtitle blocks */
+    .tl-sub {
+      position:absolute; top:4px; bottom:4px;
+      background:var(--yellow); border-radius:4px;
+      font-size:10px; font-weight:500; color:#1a1a2e;
+      padding:0 8px; display:flex; align-items:center;
+      overflow:hidden; white-space:nowrap; cursor:pointer;
+      min-width:24px; user-select:none; z-index:3;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+    .tl-sub:hover { filter:brightness(1.1); }
+    .tl-sub.selected { outline:2px solid white; outline-offset:-1px; }
+    .tl-sub-text { overflow:hidden; text-overflow:ellipsis; flex:1; }
+    .tl-sub-handle {
+      position:absolute; top:0; width:6px; height:100%; cursor:ew-resize; z-index:5;
+    }
+    .tl-sub-handle.left { left:0; border-radius:4px 0 0 4px; }
+    .tl-sub-handle.right { right:0; border-radius:0 4px 4px 0; }
+    .tl-sub-handle:hover { background:rgba(0,0,0,0.2); }
+
+    /* Zoom keyframes */
+    .tl-kf {
+      position:absolute; top:50%; width:10px; height:10px;
+      background:var(--blue); border-radius:2px;
+      transform:translate(-50%,-50%) rotate(45deg);
+      cursor:pointer; z-index:3;
+    }
+    .tl-kf:hover { filter:brightness(1.3); }
+
+    /* Cut regions on video track */
+    .tl-cut {
+      position:absolute; top:0; height:100%;
+      background:repeating-linear-gradient(45deg, rgba(240,96,96,0.15), rgba(240,96,96,0.15) 4px, rgba(240,96,96,0.05) 4px, rgba(240,96,96,0.05) 8px);
+      border-left:2px solid var(--red); border-right:2px solid var(--red);
+      z-index:3; pointer-events:none;
+    }
+    /* Segment blocks on video track */
+    .tl-segment {
+      position:absolute; top:3px; bottom:3px;
+      background:linear-gradient(180deg, rgba(124,111,245,0.12), rgba(124,111,245,0.06));
+      border:1px solid rgba(124,111,245,0.2);
+      border-radius:4px; cursor:pointer; z-index:2;
+      transition: all 0.12s;
+      display:flex; align-items:center; justify-content:center;
+      font-size:9px; color:var(--text3); font-weight:600;
+      overflow:hidden;
+    }
+    .tl-segment:hover { background:rgba(124,111,245,0.2); border-color:rgba(124,111,245,0.5); color:var(--text2); }
+    .tl-segment.selected { background:rgba(124,111,245,0.3); border-color:var(--accent); color:white; }
+    .tl-segment.deleted {
+      background:repeating-linear-gradient(45deg, rgba(240,96,96,0.12), rgba(240,96,96,0.12) 3px, transparent 3px, transparent 6px);
+      border-color:rgba(240,96,96,0.3); color:var(--red); opacity:0.6; text-decoration:line-through;
+    }
+    .tl-segment.deleted.selected { opacity:1; border-color:var(--red); }
+    .tl-cut-recording {
+      position:absolute; top:0; height:100%;
+      background:rgba(240,96,96,0.2);
+      border-left:2px dashed var(--red);
+      z-index:4; pointer-events:none;
+      animation: cutBlink 1s infinite;
+    }
+    @keyframes cutBlink { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+    /* Undo/redo */
+    .hist-btn {
+      width:26px; height:26px; border:none; background:var(--bg2);
+      color:var(--text3); border-radius:4px; cursor:pointer; font-size:13px;
+      display:flex; align-items:center; justify-content:center;
+    }
+    .hist-btn:hover { color:var(--text); background:var(--bg3); }
+    .hist-btn:disabled { opacity:0.3; cursor:not-allowed; }
+
+    /* Split marker */
+    .tl-split {
+      position:absolute; top:0; width:2px; height:100%;
+      background:var(--yellow); z-index:6; cursor:pointer;
+    }
+    .tl-split::after {
+      content:'✂'; position:absolute; top:-12px; left:-5px;
+      font-size:10px; color:var(--yellow);
+    }
+    .tl-split:hover { background:white; }
+
+    /* Transition badge */
+    .tl-transition {
+      position:absolute; top:4px; bottom:4px; z-index:7;
+      background:linear-gradient(90deg, rgba(80,208,160,0.3), rgba(80,208,160,0.1));
+      border:1px dashed var(--green); border-radius:3px;
+      display:flex; align-items:center; justify-content:center;
+      font-size:8px; color:var(--green); cursor:pointer; min-width:20px;
+    }
+    .tl-transition:hover { background:rgba(80,208,160,0.4); }
+
+    /* Add button on track */
+    .tl-add-btn {
+      position:absolute; right:4px; top:50%; transform:translateY(-50%);
+      width:20px; height:20px; border:1px dashed var(--text3);
+      border-radius:4px; background:none; color:var(--text3);
+      font-size:14px; cursor:pointer; display:flex;
+      align-items:center; justify-content:center; z-index:10;
+    }
+    .tl-add-btn:hover { border-color:var(--accent); color:var(--accent); }
+
+    /* Inline text editor */
+    .inline-edit {
+      position:absolute; z-index:30; background:var(--bg);
+      border:1px solid var(--accent); border-radius:6px;
+      padding:8px; box-shadow:0 4px 20px rgba(0,0,0,0.5);
+      display:none;
+    }
+    .inline-edit.show { display:block; }
+    .inline-edit textarea {
+      background:var(--bg2); border:1px solid var(--surface); border-radius:4px;
+      color:var(--text); padding:6px 8px; font-size:12px; outline:none;
+      width:200px; height:50px; resize:none; font-family:inherit;
+    }
+    .inline-edit textarea:focus { border-color:var(--accent); }
+    .inline-edit .btn-row { margin-top:6px; }
+  </style>
+</head>
+<body>
+<div class="titlebar"><img src="logo.svg" style="width:18px;height:18px;border-radius:4px;margin-right:6px;">Octo Captures Editor</div>
+<div class="editor">
+  <div class="main">
+    <!-- Left Tools -->
+    <div class="tools-panel">
+      <button class="tool-btn active" data-tool="zoom"><span class="tool-icon">🔍</span>Zoom</button>
+      <button class="tool-btn" data-tool="cursor"><span class="tool-icon">🖱</span>Cursor</button>
+      <button class="tool-btn" data-tool="text"><span class="tool-icon">T</span>Text</button>
+      <button class="tool-btn" data-tool="export"><span class="tool-icon">📤</span>Export</button>
+    </div>
+
+    <!-- Preview -->
+    <div class="preview-area">
+      <div class="canvas-box" id="canvasBox">
+        <video id="video" playsinline></video>
+        <canvas id="renderCanvas"></canvas>
+      </div>
+    </div>
+
+    <!-- Right Properties -->
+    <div class="props-panel" id="propsPanel">
+      <!-- Dynamic content based on selected tool/item -->
+    </div>
+  </div>
+
+  <!-- Action Bar -->
+  <div class="action-bar" id="actionBar">
+    <button class="act-btn" onclick="splitAtPlayhead()" title="분할 (S)"><span class="act-icon">✂️</span>분할</button>
+    <button class="act-btn" onclick="deleteSelectedSegment()" title="선택 구간 삭제 (Delete)"><span class="act-icon">🗑️</span>삭제</button>
+    <button class="act-btn" onclick="restoreSelectedSegment()" title="삭제 복원"><span class="act-icon">♻️</span>복원</button>
+    <div class="act-sep"></div>
+    <button class="act-btn" onclick="addSubAtPlayhead()" title="자막 추가 (T)"><span class="act-icon">💬</span>자막</button>
+    <div class="act-sep"></div>
+    <button class="act-btn" onclick="undo()" title="실행취소 (⌘Z)"><span class="act-icon">↩️</span>실행취소</button>
+    <button class="act-btn" onclick="redo()" title="다시실행 (⌘⇧Z)"><span class="act-icon">↪️</span>다시실행</button>
+  </div>
+
+  <!-- Timeline -->
+  <div class="timeline-section">
+    <div class="tl-toolbar">
+      <button class="hist-btn" id="undoBtn" title="실행취소 (⌘Z)" disabled>↩</button>
+      <button class="hist-btn" id="redoBtn" title="다시실행 (⌘⇧Z)" disabled>↪</button>
+      <div style="width:1px;height:18px;background:var(--border);margin:0 2px;"></div>
+      <button class="play-btn" id="playBtn">▶</button>
+      <span class="tc" id="tc">00:00.0 / 00:00.0</span>
+      <button class="speed-btn" id="speedBtn">1x</button>
+      <div class="tl-spacer"></div>
+      <span class="tl-hint"><kbd>Space</kbd> 재생 <kbd>,</kbd><kbd>.</kbd> 프레임 <kbd>S</kbd> 분할 <kbd>T</kbd> 자막 <kbd>C</kbd> 컷 <kbd>⌘Z</kbd> 실행취소</span>
+    </div>
+    <div class="tl-ruler" id="ruler">
+      <div class="tl-ruler-sel" id="rulerSel" style="display:none"></div>
+    </div>
+    <div class="ruler-popup" id="rulerPopup">
+      <button class="act-btn" onclick="rulerDeleteRange()"><span class="act-icon">🗑️</span>삭제</button>
+      <button class="act-btn" onclick="rulerTrimToRange()"><span class="act-icon">✂️</span>이 구간만</button>
+      <button class="act-btn" onclick="rulerCancelRange()"><span class="act-icon">✕</span></button>
+    </div>
+    <div class="tl-tracks" id="tracks">
+      <div class="tl-playhead" id="playhead"></div>
+      <!-- Video track -->
+      <div class="tl-track" id="videoTrackRow">
+        <div class="tl-track-label">Video</div>
+        <div class="tl-track-content" id="videoTrack">
+          <div class="tl-clip" id="videoClip"></div>
+          <div class="tl-trim-dim left" id="trimDimL"></div>
+          <div class="tl-trim-dim right" id="trimDimR"></div>
+          <div class="tl-trim-h" id="trimHL" style="left:0"></div>
+          <div class="tl-trim-h" id="trimHR" style="right:0"></div>
+        </div>
+      </div>
+      <!-- Subtitle track -->
+      <div class="tl-track" id="subTrackRow">
+        <div class="tl-track-label">Text</div>
+        <div class="tl-track-content" id="subTrack">
+          <button class="tl-add-btn" id="addSubBtn" title="자막 추가 (T)">+</button>
+        </div>
+      </div>
+      <!-- Zoom track (auto) -->
+      <div class="tl-track" id="zoomTrackRow">
+        <div class="tl-track-label">Zoom</div>
+        <div class="tl-track-content" id="zoomTrack"></div>
+      </div>
+    </div>
+    <!-- Inline subtitle editor -->
+    <div class="inline-edit" id="inlineEdit">
+      <textarea id="ieText" placeholder="자막 텍스트..."></textarea>
+      <div class="btn-row">
+        <button class="btn btn-a" id="ieOk">확인</button>
+        <button class="btn btn-g" id="ieCancel">취소</button>
+        <button class="btn" style="background:var(--red);color:white;margin-left:auto;" id="ieDelete">삭제</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════ Shortcuts ═══════
+const $ = id => document.getElementById(id);
+const video = $('video');
+const canvas = $('renderCanvas');
+const ctx = canvas.getContext('2d');
+
+// ═══════ State ═══════
+let cursorPositions = [];
+let subtitles = [];
+let zoomKeyframes = [];
+let selectedBg = 'none';
+let trimStart = 0, trimEnd = 0;
+let cuts = []; // { start, end } - deleted regions
+let knownDuration = 0;
+let playbackSpeed = 1;
+const speeds = [0.25, 0.5, 1, 1.5, 2];
+let speedIdx = 2;
+let curX = 0.5, curY = 0.5, curScale = 1;
+let selectedSub = null; // currently selected subtitle
+let currentTool = 'zoom';
+
+// ═══════ Split & Transition System ═══════
+let splitPoints = []; // sorted time values
+let transitions = {}; // { timeKey: { type:'fade'|'slide'|'wipe', duration:0.5 } }
+
+// ═══════ Undo/Redo ═══════
+let history = [];
+let historyIdx = -1;
+const MAX_HISTORY = 50;
+
+// Settings (with defaults)
+const S = {
+  autoZoom: true, zoomLevel: 1.5, zoomSmooth: 0.015, sensitivity: 0.012,
+  highlight: true, highlightStrength: 0.4,
+  padding: 0, radius: 12, shadow: true,
+  brightness: 1, contrast: 1, saturate: 1,
+  subFontSize: 28, subWeight: '700', subColor: '#ffffff',
+  subOutline: true, subOutlineColor: '#000000', subOutlineWidth: 3,
+  subBg: true, subBgColor: '#000000', subBgAlpha: 0.7, subPosY: 88,
+  subAnim: 'fadeIn',
+  // Cursor rendering
+  cursorVisible: true, cursorSize: 1.0, cursorStyle: 'default',
+};
+
+// ═══════ Aspect Ratio ═══════
+let aspectRatioOverride = null; // null = auto (video native), or '16:9', '1:1', '9:16', '4:3'
+
+const bgColors = {
+  none:null, g1:['#667eea','#764ba2'], g2:['#f093fb','#f5576c'],
+  g3:['#4facfe','#00f2fe'], g4:['#43e97b','#38f9d7'],
+  g5:['#fa709a','#fee140'], dark:['#1a1a2e','#1a1a2e'], white:['#f5f5f5','#f5f5f5'],
+};
+
+// ═══════ Load Video ═══════
+window.electronAPI.onLoadVideo((data) => {
+  video.src = `file://${data.filePath}`;
+  cursorPositions = data.cursorPositions || [];
+  knownDuration = data.duration || 0;
+  video.load();
+});
+video.addEventListener('loadeddata', () => {
+  trimEnd = getDur();
+  resizeCanvas();
+  updateTrimUI();
+  renderSegments();
+  renderRuler();
+  showToolProps(currentTool);
+});
+video.addEventListener('durationchange', () => {
+  if (isFinite(video.duration) && video.duration > 0) {
+    trimEnd = video.duration;
+    updateTrimUI();
+  }
+});
+video.addEventListener('error', () => console.error('Video error:', video.error));
+
+function getDur() {
+  if (isFinite(video.duration) && video.duration > 0) return video.duration;
+  return knownDuration > 0 ? knownDuration : (trimEnd > 0 ? trimEnd : 10);
+}
+
+// ═══════ Canvas Resize ═══════
+function getAspect() {
+  if (!aspectRatioOverride) return video.videoWidth / video.videoHeight;
+  const map = { '16:9': 16/9, '1:1': 1, '9:16': 9/16, '4:3': 4/3 };
+  return map[aspectRatioOverride] || (video.videoWidth / video.videoHeight);
+}
+function resizeCanvas() {
+  const area = document.querySelector('.preview-area');
+  const pw = area.clientWidth - 24, ph = area.clientHeight - 24;
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if (!vw || !vh) return;
+  const aspect = getAspect();
+  let w, h;
+  if (pw / ph > aspect) { h = ph; w = h * aspect; } else { w = pw; h = w / aspect; }
+  const dpr = window.devicePixelRatio;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+}
+function setAspectRatio(r) {
+  aspectRatioOverride = (r === 'auto') ? null : r;
+  resizeCanvas();
+}
+window.addEventListener('resize', resizeCanvas);
+
+// ═══════ Tool Selection ═══════
+document.querySelectorAll('.tool-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentTool = btn.dataset.tool;
+    selectedSub = null;
+    showToolProps(currentTool);
+  });
+});
+
+// ═══════ Properties Panel ═══════
+function showToolProps(tool) {
+  const p = $('propsPanel');
+  if (tool === 'zoom') p.innerHTML = zoomPropsHTML();
+  else if (tool === 'cursor') p.innerHTML = cursorPropsHTML();
+  else if (tool === 'text') p.innerHTML = textPropsHTML();
+  else if (tool === 'style') p.innerHTML = stylePropsHTML();
+  else if (tool === 'export') p.innerHTML = exportPropsHTML();
+  else if (tool === 'sub-edit') p.innerHTML = subEditPropsHTML();
+  bindProps();
+}
+
+function zoomPropsHTML() {
+  return `
+    <div class="props-header">Auto Zoom</div>
+    <div class="prop-group">
+      <p style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.5;">
+        커서가 움직이면 자동으로 줌인, 멈추면 줌아웃합니다.
+      </p>
+      <div class="prop-row"><span class="prop-label">활성화</span><input type="checkbox" class="tog" data-s="autoZoom" ${S.autoZoom?'checked':''}></div>
+      <div class="prop-row"><span class="prop-label">줌 배율</span><div class="prop-right"><input type="range" class="sl" data-s="zoomLevel" min="1.2" max="3" step="0.1" value="${S.zoomLevel}"><span class="prop-val">${S.zoomLevel}x</span></div></div>
+      <div class="prop-row"><span class="prop-label">부드러움</span><div class="prop-right"><input type="range" class="sl" data-s="zoomSmooth" min="0.005" max="0.06" step="0.005" value="${S.zoomSmooth}"><span class="prop-val">${S.zoomSmooth}</span></div></div>
+      <div class="prop-row"><span class="prop-label">감도</span><div class="prop-right"><input type="range" class="sl" data-s="sensitivity" min="0.003" max="0.03" step="0.001" value="${S.sensitivity}"><span class="prop-val">${S.sensitivity}</span></div></div>
+    </div>
+    <div class="prop-group">
+      <div class="prop-title">하이라이트</div>
+      <p style="font-size:10px;color:var(--text3);margin-bottom:8px;">줌 시 커서 주변을 밝게, 나머지를 어둡게 합니다.</p>
+      <div class="prop-row"><span class="prop-label">활성화</span><input type="checkbox" class="tog" data-s="highlight" ${S.highlight?'checked':''}></div>
+      <div class="prop-row"><span class="prop-label">강도</span><div class="prop-right"><input type="range" class="sl" data-s="highlightStrength" min="0.1" max="0.7" step="0.05" value="${S.highlightStrength}"><span class="prop-val">${S.highlightStrength}</span></div></div>
+    </div>
+    `;
+}
+
+function cursorPropsHTML() {
+  return `
+    <div class="props-header">커서</div>
+    <div class="prop-group">
+      <p style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.5;">
+        녹화된 커서 위치를 캔버스에 렌더링합니다.<br>macOS 스타일 커서가 표시됩니다.
+      </p>
+      <div class="prop-row"><span class="prop-label">커서 표시</span><input type="checkbox" class="tog" data-s="cursorVisible" ${S.cursorVisible?'checked':''}></div>
+      <div class="prop-row"><span class="prop-label">크기</span><div class="prop-right"><input type="range" class="sl" data-s="cursorSize" min="0.5" max="3" step="0.1" value="${S.cursorSize}"><span class="prop-val">${S.cursorSize}x</span></div></div>
+    </div>
+    <div class="prop-group">
+      <div class="prop-title">커서 데이터</div>
+      <div class="prop-row"><span class="prop-label">포인트 수</span><span class="prop-val" style="width:60px">${cursorPositions.length}</span></div>
+      <div class="prop-row"><span class="prop-label">상태</span><span class="prop-val" style="width:80px;color:${cursorPositions.length>0?'var(--green)':'var(--red)'}">${cursorPositions.length>0?'데이터 있음':'없음'}</span></div>
+    </div>`;
+}
+
+function textPropsHTML() {
+  return `
+    <div class="props-header">자막 스타일</div>
+    <div class="prop-group">
+      <div class="prop-row"><span class="prop-label">글꼴 크기</span><div class="prop-right"><input type="range" class="sl" data-s="subFontSize" min="14" max="56" step="1" value="${S.subFontSize}"><span class="prop-val">${S.subFontSize}</span></div></div>
+      <div class="prop-row"><span class="prop-label">굵기</span>
+        <select class="sel" data-s="subWeight"><option value="400" ${S.subWeight==='400'?'selected':''}>Regular</option><option value="600" ${S.subWeight==='600'?'selected':''}>Semi Bold</option><option value="700" ${S.subWeight==='700'?'selected':''}>Bold</option><option value="900" ${S.subWeight==='900'?'selected':''}>Black</option></select>
+      </div>
+      <div class="prop-row"><span class="prop-label">색상</span><input type="color" class="cpick" data-s="subColor" value="${S.subColor}"></div>
+      <div class="prop-row"><span class="prop-label">아웃라인</span><input type="checkbox" class="tog" data-s="subOutline" ${S.subOutline?'checked':''}></div>
+      <div class="prop-row"><span class="prop-label">아웃라인 색상</span><input type="color" class="cpick" data-s="subOutlineColor" value="${S.subOutlineColor}"></div>
+      <div class="prop-row"><span class="prop-label">아웃라인 두께</span><div class="prop-right"><input type="range" class="sl" data-s="subOutlineWidth" min="1" max="8" step="0.5" value="${S.subOutlineWidth}"><span class="prop-val">${S.subOutlineWidth}</span></div></div>
+      <div class="prop-row"><span class="prop-label">배경 박스</span><input type="checkbox" class="tog" data-s="subBg" ${S.subBg?'checked':''}></div>
+      <div class="prop-row"><span class="prop-label">배경 투명도</span><div class="prop-right"><input type="range" class="sl" data-s="subBgAlpha" min="0" max="1" step="0.05" value="${S.subBgAlpha}"><span class="prop-val">${S.subBgAlpha}</span></div></div>
+      <div class="prop-row"><span class="prop-label">Y 위치</span><div class="prop-right"><input type="range" class="sl" data-s="subPosY" min="5" max="95" step="1" value="${S.subPosY}"><span class="prop-val">${S.subPosY}%</span></div></div>
+      <div class="prop-row"><span class="prop-label">애니메이션</span>
+        <select class="sel" data-s="subAnim">
+          <option value="none" ${S.subAnim==='none'?'selected':''}>없음</option>
+          <option value="fadeIn" ${S.subAnim==='fadeIn'?'selected':''}>페이드 인</option>
+          <option value="slideUp" ${S.subAnim==='slideUp'?'selected':''}>슬라이드 업</option>
+          <option value="typewriter" ${S.subAnim==='typewriter'?'selected':''}>타이프라이터</option>
+          <option value="wordByWord" ${S.subAnim==='wordByWord'?'selected':''}>단어별</option>
+          <option value="popIn" ${S.subAnim==='popIn'?'selected':''}>팝 인</option>
+          <option value="bounce" ${S.subAnim==='bounce'?'selected':''}>바운스</option>
+          <option value="glow" ${S.subAnim==='glow'?'selected':''}>글로우</option>
+          <option value="shake" ${S.subAnim==='shake'?'selected':''}>흔들기</option>
+          <option value="scaleUp" ${S.subAnim==='scaleUp'?'selected':''}>확대 등장</option>
+          <option value="colorWave" ${S.subAnim==='colorWave'?'selected':''}>컬러 웨이브</option>
+        </select>
+      </div>
+    </div>
+    <div class="prop-group">
+      <div class="prop-title">자막 목록 (${subtitles.length})</div>
+      ${subtitles.map((s,i) => `
+        <div style="background:var(--bg);border-radius:4px;padding:6px 8px;margin-bottom:4px;cursor:pointer;font-size:10px;" onclick="selectSubByIndex(${i})">
+          <span style="color:var(--accent);font-weight:600;">${fmtT(s.start)}→${fmtT(s.end)}</span>
+          <span style="color:var(--text2);margin-left:6px;">${s.text.substring(0,25)}</span>
+        </div>`).join('')}
+    </div>`;
+}
+
+function subEditPropsHTML() {
+  if (!selectedSub) return textPropsHTML();
+  const s = selectedSub;
+  return `
+    <div class="props-header">자막 편집</div>
+    <div class="prop-group">
+      <textarea class="inp" id="seText" rows="3">${s.text}</textarea>
+      <div style="display:flex;gap:4px;margin-top:6px;">
+        <input class="inp" id="seStart" type="number" step="0.1" value="${s.start.toFixed(1)}" style="width:50%">
+        <input class="inp" id="seEnd" type="number" step="0.1" value="${s.end.toFixed(1)}" style="width:50%">
+      </div>
+      <div style="margin-top:6px;">
+        <select class="sel" id="seAnim" style="width:100%">
+          <option value="none" ${s.anim==='none'?'selected':''}>없음</option>
+          <option value="fadeIn" ${s.anim==='fadeIn'?'selected':''}>페이드 인</option>
+          <option value="slideUp" ${s.anim==='slideUp'?'selected':''}>슬라이드 업</option>
+          <option value="typewriter" ${s.anim==='typewriter'?'selected':''}>타이프라이터</option>
+          <option value="wordByWord" ${s.anim==='wordByWord'?'selected':''}>단어별</option>
+          <option value="popIn" ${s.anim==='popIn'?'selected':''}>팝 인</option>
+        </select>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-a" onclick="saveSelectedSub()">적용</button>
+        <button class="btn btn-g" onclick="selectedSub=null;showToolProps('text')">닫기</button>
+        <button class="btn" style="background:var(--red);color:white;margin-left:auto;" onclick="deleteSelectedSub()">삭제</button>
+      </div>
+    </div>` + textPropsHTML().replace('<div class="props-header">자막 스타일</div>','');
+}
+
+function stylePropsHTML() {
+  return `
+    <div class="props-header">스타일</div>
+    <div class="prop-group">
+      <div class="prop-title">배경</div>
+      <div class="bg-grid">
+        ${Object.keys(bgColors).map(k => {
+          const style = k === 'none' ? 'background:#000' : k === 'dark' ? 'background:#1a1a2e' : k === 'white' ? 'background:#f5f5f5' : `background:linear-gradient(135deg,${bgColors[k][0]},${bgColors[k][1]})`;
+          return `<div class="bg-sw ${selectedBg===k?'on':''}" data-bg="${k}" style="${style}"></div>`;
+        }).join('')}
+      </div>
+    </div>
+    <div class="prop-group">
+      <div class="prop-title">프레임</div>
+      <div class="prop-row"><span class="prop-label">패딩</span><div class="prop-right"><input type="range" class="sl" data-s="padding" min="0" max="80" step="2" value="${S.padding}"><span class="prop-val">${S.padding}</span></div></div>
+      <div class="prop-row"><span class="prop-label">라운드</span><div class="prop-right"><input type="range" class="sl" data-s="radius" min="0" max="40" step="1" value="${S.radius}"><span class="prop-val">${S.radius}</span></div></div>
+      <div class="prop-row"><span class="prop-label">그림자</span><input type="checkbox" class="tog" data-s="shadow" ${S.shadow?'checked':''}></div>
+    </div>
+    <div class="prop-group">
+      <div class="prop-title">색보정</div>
+      <div class="prop-row"><span class="prop-label">밝기</span><div class="prop-right"><input type="range" class="sl" data-s="brightness" min="0.5" max="1.5" step="0.05" value="${S.brightness}"><span class="prop-val">${S.brightness}</span></div></div>
+      <div class="prop-row"><span class="prop-label">대비</span><div class="prop-right"><input type="range" class="sl" data-s="contrast" min="0.5" max="2" step="0.05" value="${S.contrast}"><span class="prop-val">${S.contrast}</span></div></div>
+      <div class="prop-row"><span class="prop-label">채도</span><div class="prop-right"><input type="range" class="sl" data-s="saturate" min="0" max="2" step="0.05" value="${S.saturate}"><span class="prop-val">${S.saturate}</span></div></div>
+      <div class="btn-row"><button class="btn btn-g" onclick="S.brightness=1;S.contrast=1;S.saturate=1;showToolProps('style')">초기화</button></div>
+    </div>`;
+}
+
+function exportPropsHTML() {
+  // Build cut list HTML
+  const cutListHTML = cuts.length === 0
+    ? '<div style="font-size:10px;color:var(--text3);padding:4px 0;">삭제된 구간 없음</div>'
+    : cuts.map((c,i) => `
+        <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;">
+          <span style="font-size:10px;color:var(--red);">✂ ${fmtT(c.start)} → ${fmtT(c.end)}</span>
+          <button class="btn btn-g" style="padding:2px 6px;font-size:9px;margin-left:auto;" onclick="cuts.splice(${i},1);renderCutTrack();showToolProps('export')">삭제</button>
+        </div>`).join('');
+
+  return `
+    <div class="props-header">내보내기</div>
+    <div class="prop-group">
+      <div class="prop-row"><span class="prop-label">전체 길이</span><span class="prop-val" style="width:60px">${fmtT(getDur())}</span></div>
+      <div class="prop-row"><span class="prop-label">출력 길이</span><span class="prop-val" style="width:60px">${fmtT(getEffectiveDuration())}</span></div>
+      ${cuts.length > 0 ? `<div class="prop-row"><span class="prop-label">삭제 구간</span><span class="prop-val" style="width:60px">${cuts.length}개</span></div>` : ''}
+    </div>
+    <div class="prop-group">
+      <div class="prop-title">포맷</div>
+      <div class="prop-row"><span class="prop-label">형식</span>
+        <select class="sel" id="expFormat">
+          <option value="webm">WebM</option>
+          <option value="mp4">MP4</option>
+          <option value="gif">GIF</option>
+        </select>
+      </div>
+      <div class="prop-row"><span class="prop-label">비율</span>
+        <select class="sel" id="expAspect" onchange="setAspectRatio(this.value)">
+          <option value="auto" ${!aspectRatioOverride?'selected':''}>원본</option>
+          <option value="16:9" ${aspectRatioOverride==='16:9'?'selected':''}>16:9</option>
+          <option value="1:1" ${aspectRatioOverride==='1:1'?'selected':''}>1:1</option>
+          <option value="9:16" ${aspectRatioOverride==='9:16'?'selected':''}>9:16</option>
+          <option value="4:3" ${aspectRatioOverride==='4:3'?'selected':''}>4:3</option>
+        </select>
+      </div>
+      <div class="prop-row"><span class="prop-label">비트레이트</span>
+        <select class="sel" id="expBitrate"><option value="8000000">8 Mbps</option><option value="16000000" selected>16 Mbps</option><option value="32000000">32 Mbps</option></select>
+      </div>
+      <div id="gifOptions" style="display:none;margin-top:8px;">
+        <div class="prop-row"><span class="prop-label">FPS</span>
+          <select class="sel" id="gifFps"><option value="10">10</option><option value="15" selected>15</option><option value="24">24</option><option value="30">30</option></select>
+        </div>
+        <div class="prop-row"><span class="prop-label">크기</span>
+          <select class="sel" id="gifScale"><option value="0.25">25%</option><option value="0.5" selected>50%</option><option value="0.75">75%</option><option value="1">100%</option></select>
+        </div>
+        <div class="prop-row"><span class="prop-label">품질</span>
+          <select class="sel" id="gifQuality"><option value="20">빠름 (낮음)</option><option value="10" selected>보통</option><option value="5">느림 (높음)</option></select>
+        </div>
+      </div>
+    </div>
+    <div class="prop-group">
+      <button class="export-btn" id="exportBtn" onclick="doExport()">내보내기</button>
+      <div class="export-status" id="exportStatus"></div>
+    </div>`;
+}
+
+function bindProps() {
+  // Sliders & toggles & colors
+  document.querySelectorAll('[data-s]').forEach(el => {
+    const key = el.dataset.s;
+    const handler = () => {
+      if (el.type === 'checkbox') S[key] = el.checked;
+      else if (el.type === 'range' || el.type === 'number') S[key] = parseFloat(el.value);
+      else S[key] = el.value;
+      // Update value display
+      const valEl = el.parentElement?.querySelector('.prop-val');
+      if (valEl) {
+        const v = parseFloat(el.value);
+        valEl.textContent = Number.isInteger(v) ? v + (key==='subPosY'?'%':'') : v.toFixed(v<1?3:1) + (key==='zoomLevel'||key==='cursorSize'?'x':'');
+      }
+    };
+    el.addEventListener('input', handler);
+    el.addEventListener('change', handler);
+  });
+  // Background swatches
+  document.querySelectorAll('.bg-sw').forEach(sw => {
+    sw.addEventListener('click', () => {
+      document.querySelectorAll('.bg-sw').forEach(s => s.classList.remove('on'));
+      sw.classList.add('on');
+      selectedBg = sw.dataset.bg;
+    });
+  });
+  // Format toggle for GIF options
+  const fmtSel = document.getElementById('expFormat');
+  if (fmtSel) {
+    fmtSel.addEventListener('change', () => {
+      const v = fmtSel.value;
+      const gifOpts = document.getElementById('gifOptions');
+      const expBtn = document.getElementById('exportBtn');
+      if (gifOpts) gifOpts.style.display = v === 'gif' ? 'block' : 'none';
+      const labels = { webm: 'WebM 내보내기', mp4: 'MP4 내보내기', gif: 'GIF 내보내기' };
+      if (expBtn) expBtn.textContent = labels[v] || '내보내기';
+    });
+  }
+}
+
+// ═══════ Cursor Helpers ═══════
+function getCursorAt(ms) {
+  if (!cursorPositions.length) return {x:0.5,y:0.5};
+  let lo=0,hi=cursorPositions.length-1;
+  while(lo<hi){const m=(lo+hi)>>1;cursorPositions[m].t<ms?lo=m+1:hi=m;}
+  if(lo===0) return cursorPositions[0];
+  const a=cursorPositions[lo-1],b=cursorPositions[lo];
+  const r=b.t-a.t; if(!r) return b;
+  const t=(ms-a.t)/r;
+  return {x:a.x+(b.x-a.x)*t, y:a.y+(b.y-a.y)*t};
+}
+let lastMovingTime = 0;
+function cursorMoving(ms) {
+  const w=1200,n=8; let d=0;
+  for(let i=0;i<n;i++){const t1=ms-w+(w/n)*i,t2=ms-w+(w/n)*(i+1);const p1=getCursorAt(t1),p2=getCursorAt(t2);d+=Math.hypot(p2.x-p1.x,p2.y-p1.y);}
+  if(d/n>S.sensitivity){lastMovingTime=ms;return true;}
+  return (ms-lastMovingTime)<1500;
+}
+
+// ═══════ Subtitle Helpers ═══════
+function getSubAnim(sub,t){const d=sub.end-sub.start,e=t-sub.start,r=sub.end-t;const fi=Math.min(1,e/Math.min(0.3,d*0.15)),fo=Math.min(1,r/Math.min(0.3,d*0.15));return{fi,fo,p:Math.min(1,e/d),e};}
+function rrect(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.quadraticCurveTo(x+w,y,x+w,y+r);c.lineTo(x+w,y+h-r);c.quadraticCurveTo(x+w,y+h,x+w-r,y+h);c.lineTo(x+r,y+h);c.quadraticCurveTo(x,y+h,x,y+h-r);c.lineTo(x,y+r);c.quadraticCurveTo(x,y,x+r,y);c.closePath();}
+
+// ═══════ Render ═══════
+function render() {
+  requestAnimationFrame(render);
+  const vw=video.videoWidth,vh=video.videoHeight;
+  if(!vw||!vh) return;
+  const dpr=window.devicePixelRatio,W=canvas.width/dpr,H=canvas.height/dpr;
+  const ms=video.currentTime*1000;
+
+  // Zoom
+  let ts=1,tx=0.5,ty=0.5;
+  const kf=getKfAt(video.currentTime);
+  if(kf&&zoomKeyframes.length){ts=kf.zoom;tx=kf.x;ty=kf.y;}
+  else if(S.autoZoom&&cursorPositions.length>0){
+    const c=getCursorAt(ms);tx=c.x;ty=c.y;
+    ts=cursorMoving(ms)?S.zoomLevel:1;
+  }
+  const posFactor=Math.max(S.zoomSmooth*5,0.08);
+  curScale+=(ts-curScale)*S.zoomSmooth*0.3;
+  curX+=(tx-curX)*posFactor;curY+=(ty-curY)*posFactor;
+
+  const sc=curScale,pad=S.padding,rad=S.radius;
+  const sW=vw/sc,sH=vh/sc;
+  let sX=curX*vw-sW/2,sY=curY*vh-sH/2;
+  sX=Math.max(0,Math.min(vw-sW,sX));sY=Math.max(0,Math.min(vh-sH,sY));
+
+  const iW=W-pad*2,iH=H-pad*2,va=vw/vh,ia=iW/iH;
+  let rW,rH,oX,oY;
+  if(va>ia){rW=iW;rH=rW/va;}else{rH=iH;rW=rH*va;}
+  oX=pad+(iW-rW)/2;oY=pad+(iH-rH)/2;
+
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.save();ctx.scale(dpr,dpr);
+
+  // BG
+  if(selectedBg!=='none'&&pad>0){const c=bgColors[selectedBg];if(c){const g=ctx.createLinearGradient(0,0,W,H);g.addColorStop(0,c[0]);g.addColorStop(1,c[1]);ctx.fillStyle=g;ctx.fillRect(0,0,W,H);}}
+
+  // Shadow
+  if(S.shadow&&pad>0){ctx.save();ctx.shadowColor='rgba(0,0,0,0.5)';ctx.shadowBlur=30;ctx.shadowOffsetY=8;ctx.fillStyle='#000';rrect(ctx,oX,oY,rW,rH,rad);ctx.fill();ctx.restore();}
+
+  // Video
+  ctx.save();rrect(ctx,oX,oY,rW,rH,rad);ctx.clip();
+  ctx.filter=`brightness(${S.brightness}) contrast(${S.contrast}) saturate(${S.saturate})`;
+  ctx.drawImage(video,sX,sY,sW,sH,oX,oY,rW,rH);
+  ctx.filter='none';
+
+
+  // Highlight effect - darken edges, brighten around cursor
+  if(S.highlight&&sc>1.05&&cursorPositions.length>0){
+    const cx2=oX+((curX*vw-sX)/sW)*rW;
+    const cy2=oY+((curY*vh-sY)/sH)*rH;
+    const strength=S.highlightStrength*Math.min(1,sc-1);
+    const spotR=Math.min(rW,rH)*0.35;
+    const grad=ctx.createRadialGradient(cx2,cy2,spotR*0.3,cx2,cy2,spotR*1.2);
+    grad.addColorStop(0,`rgba(0,0,0,0)`);
+    grad.addColorStop(0.6,`rgba(0,0,0,${strength*0.3})`);
+    grad.addColorStop(1,`rgba(0,0,0,${strength})`);
+    ctx.fillStyle=grad;
+    ctx.fillRect(oX,oY,rW,rH);
+  }
+
+  // ── Cursor rendering ──
+  if (S.cursorVisible && cursorPositions.length > 0) {
+    const cp = getCursorAt(ms);
+    const cx2 = oX + ((cp.x * vw - sX) / sW) * rW;
+    const cy2 = oY + ((cp.y * vh - sY) / sH) * rH;
+    // Only draw if cursor is within the visible frame
+    if (cx2 >= oX && cx2 <= oX + rW && cy2 >= oY && cy2 <= oY + rH) {
+      const cSize = 20 * S.cursorSize * (rW / 800);
+      ctx.save();
+      ctx.translate(cx2, cy2);
+      // macOS-style arrow cursor
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(0, cSize * 1.4);
+      ctx.lineTo(cSize * 0.35, cSize * 1.05);
+      ctx.lineTo(cSize * 0.75, cSize * 1.65);
+      ctx.lineTo(cSize * 0.95, cSize * 1.5);
+      ctx.lineTo(cSize * 0.55, cSize * 0.9);
+      ctx.lineTo(cSize * 1.0, cSize * 0.85);
+      ctx.closePath();
+      // Shadow
+      ctx.shadowColor = 'rgba(0,0,0,0.4)';
+      ctx.shadowBlur = 4;
+      ctx.shadowOffsetX = 1;
+      ctx.shadowOffsetY = 1;
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = Math.max(1, cSize * 0.07);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  ctx.restore(); // clip
+
+  // Subtitles
+  subtitles.filter(s=>video.currentTime>=s.start&&video.currentTime<=s.end).forEach(sub=>{
+    const fs=S.subFontSize,py=oY+rH*(S.subPosY/100),cx2=oX+rW/2;
+    const a=getSubAnim(sub,video.currentTime);
+    ctx.save();ctx.font=`${S.subWeight} ${fs}px -apple-system,sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+    let alpha=1;if(['fadeIn','slideUp','popIn','bounce','glow','shake','scaleUp','colorWave'].includes(sub.anim))alpha=a.fi*a.fo;
+    ctx.globalAlpha=Math.max(0,alpha);
+    let offY=sub.anim==='slideUp'?(1-a.fi)*20:0;
+    if(sub.anim==='shake'&&a.fi>0.5){offY+=Math.sin(a.e*30)*3*(1-a.e/((sub.end-sub.start)*0.5));}
+    if(sub.anim==='bounce'){const bp=Math.min(1,a.fi*2);offY=-(1-bp)*(1-bp)*30+Math.abs(Math.sin(bp*Math.PI*3))*15*(1-bp);}
+    ctx.translate(cx2,py+offY);
+    if(sub.anim==='popIn'&&a.fi<1){const es=0.5+a.fi*0.5;ctx.scale(es,es);}
+    if(sub.anim==='scaleUp'){const es=Math.min(1,a.fi*1.2);ctx.scale(es,es);}
+    if(sub.anim==='bounce'&&a.fi<1){const bs=0.5+a.fi*0.6;ctx.scale(bs,bs);}
+    const lines=sub.text.split('\n'),lh=fs*1.4;
+    lines.forEach((line,i)=>{
+      let dl=line;if(sub.anim==='typewriter')dl=line.substring(0,Math.floor(a.p*line.length*1.5));
+      const ly=-lines.length*lh/2+i*lh+lh/2;
+      if(S.subBg){const tw=ctx.measureText(dl).width;rrect(ctx,-tw/2-14,ly-lh/2-4,tw+28,lh+8,(lh+8)/2);ctx.fillStyle=S.subBgColor+Math.round(S.subBgAlpha*255).toString(16).padStart(2,'0');ctx.fill();}
+      if(sub.anim==='glow'){ctx.shadowColor=S.subColor;ctx.shadowBlur=12+Math.sin(a.e*8)*6;ctx.shadowOffsetX=0;ctx.shadowOffsetY=0;}
+      if(S.subOutline){ctx.strokeStyle=S.subOutlineColor;ctx.lineWidth=S.subOutlineWidth;ctx.lineJoin='round';ctx.strokeText(dl,0,ly);}
+      if(sub.anim==='colorWave'){
+        const grad=ctx.createLinearGradient(-100,ly,100,ly);
+        const hue=(a.e*360)%360;
+        grad.addColorStop(0,`hsl(${hue},90%,70%)`);grad.addColorStop(0.5,`hsl(${(hue+60)%360},90%,70%)`);grad.addColorStop(1,`hsl(${(hue+120)%360},90%,70%)`);
+        ctx.fillStyle=grad;
+      } else { ctx.fillStyle=S.subColor; }
+      ctx.fillText(dl,0,ly);
+      if(sub.anim==='glow'){ctx.shadowBlur=0;}
+    });
+    ctx.restore();
+  });
+
+  // ── Transition fade effect ──
+  splitPoints.forEach(sp => {
+    const tr = transitions[sp.toFixed(3)];
+    if (!tr) return;
+    const halfDur = (tr.duration || 0.5) / 2;
+    const t = video.currentTime;
+    if (t >= sp - halfDur && t <= sp + halfDur) {
+      const progress = (t - (sp - halfDur)) / (halfDur * 2);
+      if (tr.type === 'fade') {
+        const fadeAlpha = progress < 0.5 ? progress * 2 * 0.5 : (1 - progress) * 2 * 0.5;
+        ctx.fillStyle = `rgba(0,0,0,${fadeAlpha})`;
+        ctx.fillRect(oX, oY, rW, rH);
+      } else if (tr.type === 'wipe') {
+        ctx.fillStyle = 'rgba(0,0,0,0.8)';
+        const wipeX = progress < 0.5 ? oX : oX + rW * (1 - (progress - 0.5) * 2);
+        const wipeW = progress < 0.5 ? rW * progress * 2 : rW * (progress - 0.5) * 2;
+        ctx.fillRect(wipeX, oY, wipeW, rH);
+      }
+    }
+  });
+
+  ctx.restore();
+}
+render();
+
+// ═══════ Zoom Keyframes ═══════
+function getKfAt(t){if(!zoomKeyframes.length)return null;const s=[...zoomKeyframes].sort((a,b)=>a.t-b.t);if(t<=s[0].t)return s[0];if(t>=s[s.length-1].t)return s[s.length-1];for(let i=0;i<s.length-1;i++){if(t>=s[i].t&&t<=s[i+1].t){const a2=s[i],b2=s[i+1],p=(t-a2.t)/(b2.t-a2.t),ep=p<0.5?2*p*p:1-Math.pow(-2*p+2,2)/2;return{zoom:a2.zoom+(b2.zoom-a2.zoom)*ep,x:a2.x+(b2.x-a2.x)*ep,y:a2.y+(b2.y-a2.y)*ep};}}return s[s.length-1];}
+
+// ═══════ Playback ═══════
+function togglePlay(){if(video.paused){if(video.currentTime<trimStart||video.currentTime>=trimEnd)video.currentTime=trimStart;video.play();$('playBtn').textContent='⏸';}else{video.pause();$('playBtn').textContent='▶';}}
+$('playBtn').addEventListener('click',togglePlay);
+$('speedBtn').addEventListener('click',()=>{speedIdx=(speedIdx+1)%speeds.length;playbackSpeed=speeds[speedIdx];video.playbackRate=playbackSpeed;$('speedBtn').textContent=playbackSpeed+'x';});
+
+video.addEventListener('timeupdate',()=>{
+  const dur=getDur();if(!dur)return;
+  if(video.currentTime>=trimEnd){video.pause();video.currentTime=trimStart;$('playBtn').textContent='▶';}
+  const pct=video.currentTime/dur;
+  $('playhead').style.left=`calc(56px + (100% - 56px) * ${pct})`;
+  $('tc').textContent=`${fmtT(video.currentTime)} / ${fmtT(dur)}`;
+  // Highlight selected sub
+  document.querySelectorAll('.tl-sub').forEach(el=>{
+    const idx=parseInt(el.dataset.idx);
+    if(subtitles[idx])el.classList.toggle('selected',selectedSub===subtitles[idx]);
+  });
+});
+video.addEventListener('ended',()=>{$('playBtn').textContent='▶';});
+
+// Click on tracks to seek
+$('tracks').addEventListener('click',(e)=>{
+  if(e.target.closest('.tl-sub')||e.target.closest('.tl-trim-h')||e.target.closest('.tl-add-btn')||e.target.closest('.tl-kf')||e.target.closest('.tl-segment'))return;
+  const content=e.target.closest('.tl-track-content');
+  if(!content)return;
+  const rect=content.getBoundingClientRect();
+  video.currentTime=Math.max(0,(e.clientX-rect.left)/rect.width)*getDur();
+});
+
+// ═══════ Keyboard ═══════
+document.addEventListener('keydown',(e)=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.tagName==='SELECT')return;
+  if(e.code==='Escape'){hideRulerPopup();}
+  if(e.code==='Space'){e.preventDefault();togglePlay();}
+  if(e.code==='ArrowLeft')video.currentTime=Math.max(trimStart,video.currentTime-(e.shiftKey?0.1:e.altKey?5:1));
+  if(e.code==='ArrowRight')video.currentTime=Math.min(trimEnd,video.currentTime+(e.shiftKey?0.1:e.altKey?5:1));
+  if(e.code==='Comma'){e.preventDefault();video.currentTime=Math.max(0,video.currentTime-1/30);}  // , = 1프레임 뒤로
+  if(e.code==='Period'){e.preventDefault();video.currentTime=Math.min(getDur(),video.currentTime+1/30);}  // . = 1프레임 앞으로
+  if(e.code==='KeyI'){trimStart=video.currentTime;updateTrimUI();if(currentTool==='export')showToolProps('export');}
+  if(e.code==='KeyO'){trimEnd=video.currentTime;updateTrimUI();if(currentTool==='export')showToolProps('export');}
+  if(e.code==='KeyT'){e.preventDefault();addSubAtPlayhead();}
+  if(e.code==='KeyC'){e.preventDefault();
+    // 현재 재생헤드 위치의 세그먼트를 자동 선택하고 삭제
+    const segs=getSegments();const ct=video.currentTime;
+    const si=segs.findIndex(s=>ct>=s.start&&ct<s.end);
+    if(si>=0){selectedSegIdx=si;deleteSelectedSegment();}
+  }
+  if(e.code==='KeyS'){e.preventDefault();splitAtPlayhead();}
+  if((e.metaKey||e.ctrlKey)&&e.code==='KeyZ'&&!e.shiftKey){e.preventDefault();undo();}
+  if((e.metaKey||e.ctrlKey)&&e.code==='KeyZ'&&e.shiftKey){e.preventDefault();redo();}
+  if(e.code==='Delete'||e.code==='Backspace'){
+    if(selectedSegIdx>=0){e.preventDefault();deleteSelectedSegment();}
+    else if(selectedSub){deleteSelectedSub();}
+  }
+});
+
+// ═══════ Trim ═══════
+function updateTrimUI(){
+  const d=getDur();if(!d)return;
+  if(!isFinite(trimEnd)||trimEnd<=0)trimEnd=d;
+  $('trimDimL').style.width=(trimStart/d*100)+'%';
+  $('trimDimR').style.width=((d-trimEnd)/d*100)+'%';
+  $('trimHL').style.left=(trimStart/d*100)+'%';
+  $('trimHR').style.right=((d-trimEnd)/d*100)+'%';
+}
+function setupTrimDrag(h,type){
+  h.addEventListener('mousedown',(e)=>{e.stopPropagation();
+    const track=$('videoTrack');
+    const onMove=(ev)=>{const rect=track.getBoundingClientRect();const pct=Math.max(0,Math.min(1,(ev.clientX-rect.left)/rect.width));const sec=pct*getDur();
+      if(type==='start')trimStart=Math.min(sec,trimEnd-0.5);else trimEnd=Math.max(sec,trimStart+0.5);updateTrimUI();};
+    const onUp=()=>{document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);};
+    document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);
+  });
+}
+setupTrimDrag($('trimHL'),'start');
+setupTrimDrag($('trimHR'),'end');
+
+// ═══════ Subtitle Track ═══════
+function addSubAtPlayhead(){
+  const t=video.currentTime;
+  const sub={id:Date.now(),text:'자막',start:t,end:Math.min(getDur(),t+3),anim:S.subAnim};
+  subtitles.push(sub);subtitles.sort((a,b)=>a.start-b.start);
+  selectedSub=sub;
+  renderSubTrack();
+  saveState();
+  // Open inline editor
+  openInlineEdit(sub);
+  // Switch to text tool
+  document.querySelectorAll('.tool-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelector('[data-tool="text"]').classList.add('active');
+  currentTool='sub-edit';
+  showToolProps('sub-edit');
+}
+
+$('addSubBtn').addEventListener('click',(e)=>{e.stopPropagation();addSubAtPlayhead();});
+// Zoom is fully automatic - no manual keyframes needed
+
+function renderSubTrack(){
+  const track=$('subTrack');
+  track.querySelectorAll('.tl-sub').forEach(e=>e.remove());
+  const dur=getDur();if(!dur)return;
+  subtitles.forEach((sub,idx)=>{
+    const el=document.createElement('div');
+    el.className='tl-sub'+(selectedSub===sub?' selected':'');
+    el.dataset.idx=idx;
+    el.style.left=(sub.start/dur*100)+'%';
+    el.style.width=Math.max(1,(sub.end-sub.start)/dur*100)+'%';
+    el.innerHTML=`<span class="tl-sub-text">${sub.text||'(빈 자막)'}</span><div class="tl-sub-handle left"></div><div class="tl-sub-handle right"></div>`;
+
+    // Click to select
+    el.addEventListener('click',(e)=>{e.stopPropagation();selectSub(sub);});
+    // Double click to edit inline
+    el.addEventListener('dblclick',(e)=>{e.stopPropagation();openInlineEdit(sub);});
+
+    // Drag to move
+    el.addEventListener('mousedown',(e)=>{
+      if(e.target.classList.contains('tl-sub-handle'))return;
+      e.stopPropagation();
+      const startX=e.clientX,origStart=sub.start,origEnd=sub.end,subDur=origEnd-origStart;
+      const onMove=(ev)=>{const dx=ev.clientX-startX;const rect=track.getBoundingClientRect();const dtSec=(dx/rect.width)*dur;let ns=origStart+dtSec;ns=Math.max(0,Math.min(dur-subDur,ns));sub.start=ns;sub.end=ns+subDur;renderSubTrack();};
+      const onUp=()=>{document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);if(currentTool==='sub-edit')showToolProps('sub-edit');};
+      document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);
+    });
+
+    // Handle resize
+    el.querySelectorAll('.tl-sub-handle').forEach(h=>{
+      h.addEventListener('mousedown',(e)=>{
+        e.stopPropagation();
+        const isLeft=h.classList.contains('left');
+        const onMove=(ev)=>{const rect=track.getBoundingClientRect();const pct=(ev.clientX-rect.left)/rect.width;const sec=Math.max(0,Math.min(dur,pct*dur));
+          if(isLeft)sub.start=Math.min(sec,sub.end-0.3);else sub.end=Math.max(sec,sub.start+0.3);renderSubTrack();};
+        const onUp=()=>{document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);if(currentTool==='sub-edit')showToolProps('sub-edit');};
+        document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);
+      });
+    });
+    track.appendChild(el);
+  });
+}
+
+function renderZoomTrack(){
+  const track=$('zoomTrack');track.querySelectorAll('.tl-kf').forEach(e=>e.remove());
+  const dur=getDur();if(!dur)return;
+  zoomKeyframes.forEach((kf,i)=>{
+    const el=document.createElement('div');el.className='tl-kf';el.style.left=(kf.t/dur*100)+'%';
+    el.addEventListener('click',(e)=>{e.stopPropagation();video.currentTime=kf.t;});
+    el.addEventListener('contextmenu',(e)=>{e.preventDefault();e.stopPropagation();zoomKeyframes.splice(i,1);renderZoomTrack();});
+    track.appendChild(el);
+  });
+}
+
+// Double-click on empty subtitle track area
+$('subTrack').addEventListener('dblclick',(e)=>{
+  if(e.target.closest('.tl-sub'))return;
+  const rect=$('subTrack').getBoundingClientRect();
+  const pct=(e.clientX-rect.left)/rect.width;
+  const t=pct*getDur();
+  const sub={id:Date.now(),text:'',start:t,end:Math.min(getDur(),t+3),anim:S.subAnim};
+  subtitles.push(sub);subtitles.sort((a,b)=>a.start-b.start);
+  selectedSub=sub;renderSubTrack();openInlineEdit(sub);
+});
+
+// ═══════ Inline Editor ═══════
+let editingSub = null;
+function openInlineEdit(sub){
+  editingSub=sub;selectedSub=sub;
+  const ie=$('inlineEdit');
+  $('ieText').value=sub.text==='자막'?'':sub.text;
+  ie.classList.add('show');
+  // Position near the subtitle block
+  const track=$('subTrack');const rect=track.getBoundingClientRect();
+  const dur=getDur();
+  ie.style.left=Math.min(rect.left+(sub.start/dur)*rect.width, window.innerWidth-220)+'px';
+  ie.style.bottom=(window.innerHeight-rect.top+4)+'px';
+  setTimeout(()=>$('ieText').focus(),50);
+}
+$('ieOk').addEventListener('click',()=>{if(editingSub){editingSub.text=$('ieText').value||'자막';renderSubTrack();if(currentTool==='sub-edit')showToolProps('sub-edit');}$('inlineEdit').classList.remove('show');editingSub=null;});
+$('ieCancel').addEventListener('click',()=>{$('inlineEdit').classList.remove('show');editingSub=null;});
+$('ieDelete').addEventListener('click',()=>{if(editingSub){subtitles=subtitles.filter(s=>s.id!==editingSub.id);selectedSub=null;editingSub=null;renderSubTrack();showToolProps('text');}$('inlineEdit').classList.remove('show');});
+$('ieText').addEventListener('keydown',(e)=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('ieOk').click();}if(e.key==='Escape')$('ieCancel').click();});
+
+function selectSub(sub){selectedSub=sub;video.currentTime=sub.start;currentTool='sub-edit';document.querySelectorAll('.tool-btn').forEach(b=>b.classList.remove('active'));document.querySelector('[data-tool="text"]').classList.add('active');showToolProps('sub-edit');renderSubTrack();}
+function selectSubByIndex(i){selectSub(subtitles[i]);}
+function saveSelectedSub(){if(!selectedSub)return;selectedSub.text=$('seText').value;selectedSub.start=parseFloat($('seStart').value);selectedSub.end=parseFloat($('seEnd').value);selectedSub.anim=$('seAnim').value;subtitles.sort((a,b)=>a.start-b.start);renderSubTrack();showToolProps('sub-edit');saveState();}
+function deleteSelectedSub(){subtitles=subtitles.filter(s=>s!==selectedSub);selectedSub=null;renderSubTrack();currentTool='text';showToolProps('text');saveState();}
+
+// ═══════ Segment Selection (CapCut-style) ═══════
+let selectedSegIdx = -1; // index of the selected segment
+
+function getSegments() {
+  // Segments are defined by trimStart, splitPoints, trimEnd
+  const boundaries = [trimStart, ...splitPoints.filter(s => s > trimStart && s < trimEnd), trimEnd];
+  const segs = [];
+  for (let i = 0; i < boundaries.length - 1; i++) {
+    segs.push({ start: boundaries[i], end: boundaries[i+1], deleted: isSegmentDeleted(boundaries[i], boundaries[i+1]) });
+  }
+  return segs;
+}
+
+function isSegmentDeleted(start, end) {
+  return cuts.some(c => c.start <= start + 0.05 && c.end >= end - 0.05);
+}
+
+function deleteSelectedSegment() {
+  const segs = getSegments();
+  if (selectedSegIdx < 0 || selectedSegIdx >= segs.length) return;
+  const seg = segs[selectedSegIdx];
+  if (seg.deleted) return; // already deleted
+  cuts.push({ start: seg.start, end: seg.end });
+  mergeCuts();
+  renderCutTrack(); renderSegments(); saveState();
+  if (currentTool === 'export') showToolProps('export');
+}
+
+function restoreSelectedSegment() {
+  const segs = getSegments();
+  if (selectedSegIdx < 0 || selectedSegIdx >= segs.length) return;
+  const seg = segs[selectedSegIdx];
+  if (!seg.deleted) return; // not deleted
+  // Remove cuts that overlap this segment
+  cuts = cuts.filter(c => !(c.start <= seg.start + 0.05 && c.end >= seg.end - 0.05));
+  renderCutTrack(); renderSegments(); saveState();
+  if (currentTool === 'export') showToolProps('export');
+}
+
+function renderSegments() {
+  const track = $('videoTrack');
+  track.querySelectorAll('.tl-segment').forEach(e => e.remove());
+  const dur = getDur(); if (!dur) return;
+  const segs = getSegments();
+  segs.forEach((seg, idx) => {
+    const el = document.createElement('div');
+    const isSelected = (idx === selectedSegIdx);
+    el.className = 'tl-segment' + (isSelected ? ' selected' : '') + (seg.deleted ? ' deleted' : '');
+    el.style.left = (seg.start / dur * 100) + '%';
+    el.style.width = ((seg.end - seg.start) / dur * 100) + '%';
+    el.textContent = (seg.end - seg.start).toFixed(1) + 's';
+    el.title = seg.deleted
+      ? `[삭제됨] ${fmtT(seg.start)}→${fmtT(seg.end)} — 클릭 후 ♻복원`
+      : `${fmtT(seg.start)}→${fmtT(seg.end)} — 클릭 선택 → Delete 삭제`;
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      selectedSegIdx = (selectedSegIdx === idx) ? -1 : idx;
+      renderSegments();
+    });
+    track.appendChild(el);
+  });
+}
+
+// ═══════ Timeline Ruler ═══════
+function renderRuler() {
+  const ruler = $('ruler');
+  // Keep selection overlay
+  const sel = $('rulerSel');
+  ruler.querySelectorAll('.tl-ruler-tick,.tl-ruler-label').forEach(e => e.remove());
+  const effDur = getDur();
+  if (!effDur || effDur < 0.1) return;
+
+  // Decide tick interval based on duration
+  let interval;
+  if (effDur <= 5) interval = 0.5;
+  else if (effDur <= 15) interval = 1;
+  else if (effDur <= 60) interval = 5;
+  else if (effDur <= 300) interval = 10;
+  else interval = 30;
+
+  const majorEvery = effDur <= 15 ? 2 : 2; // every Nth tick is major
+
+  for (let t = 0, i = 0; t <= effDur; t += interval, i++) {
+    const pct = (t / effDur * 100);
+    const isMajor = (i % majorEvery === 0);
+
+    const tick = document.createElement('div');
+    tick.className = 'tl-ruler-tick' + (isMajor ? ' major' : '');
+    tick.style.left = pct + '%';
+    ruler.appendChild(tick);
+
+    if (isMajor) {
+      const label = document.createElement('div');
+      label.className = 'tl-ruler-label';
+      label.style.left = pct + '%';
+      const m = Math.floor(t / 60);
+      const s = Math.floor(t % 60);
+      label.textContent = m > 0 ? `${m}:${s.toString().padStart(2,'0')}` : `${s}s`;
+      ruler.appendChild(label);
+    }
+  }
+}
+
+// ═══════ Ruler: click=seek, drag=range select ═══════
+let rulerRange = null; // {startEff, endEff, startSrc, endSrc}
+
+function rulerPctToTime(clientX) {
+  const rect = $('ruler').getBoundingClientRect();
+  const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+  return pct * getDur();
+}
+
+$('ruler').addEventListener('mousedown', (e) => {
+  if (e.target.closest('.tl-ruler-sel')) return;
+  const startX = e.clientX;
+  const startEff = rulerPctToTime(e.clientX);
+  let dragged = false;
+  hideRulerPopup();
+
+  const sel = $('rulerSel');
+
+  const onMove = (ev) => {
+    const dx = Math.abs(ev.clientX - startX);
+    if (dx > 5) dragged = true;
+
+    if (dragged) {
+      const curTime = rulerPctToTime(ev.clientX);
+      const dur2 = getDur();
+      const s = Math.min(startEff, curTime), en = Math.max(startEff, curTime);
+      sel.style.display = 'block';
+      sel.style.left = (s / dur2 * 100) + '%';
+      sel.style.width = ((en - s) / dur2 * 100) + '%';
+      // label
+      sel.innerHTML = `<div class="tl-ruler-sel-label">${(en - s).toFixed(1)}s</div>`;
+    }
+  };
+
+  const onUp = (ev) => {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+
+    if (!dragged) {
+      // Short click = seek
+      sel.style.display = 'none';
+      rulerRange = null;
+      video.currentTime = startEff;
+    } else {
+      // Drag = range selection
+      const endEff = rulerPctToTime(ev.clientX);
+      const s = Math.min(startEff, endEff), en = Math.max(startEff, endEff);
+      if (en - s > 0.1) {
+        rulerRange = { start: s, end: en };
+        showRulerPopup(ev.clientX);
+      } else {
+        sel.style.display = 'none';
+        rulerRange = null;
+        video.currentTime = startEff;
+      }
+    }
+  };
+
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+});
+
+function showRulerPopup(x) {
+  const popup = $('rulerPopup');
+  const rulerRect = $('ruler').getBoundingClientRect();
+  popup.style.left = Math.min(x, window.innerWidth - 200) + 'px';
+  popup.style.top = (rulerRect.bottom + 2) + 'px';
+  popup.classList.add('show');
+}
+
+function hideRulerPopup() {
+  $('rulerPopup').classList.remove('show');
+  $('rulerSel').style.display = 'none';
+  rulerRange = null;
+}
+
+function rulerDeleteRange() {
+  if (!rulerRange) return;
+  const startSrc = rulerRange.start, endSrc = rulerRange.end;
+  // Add splits at boundaries if not already there
+  if (startSrc > trimStart + 0.1 && !splitPoints.some(sp => Math.abs(sp - startSrc) < 0.05)) {
+    splitPoints.push(startSrc);
+  }
+  if (endSrc < trimEnd - 0.1 && !splitPoints.some(sp => Math.abs(sp - endSrc) < 0.05)) {
+    splitPoints.push(endSrc);
+  }
+  splitPoints.sort((a, b) => a - b);
+  // Add cut for this range
+  cuts.push({ start: startSrc, end: endSrc });
+  mergeCuts();
+  renderSplitMarkers(); renderCutTrack(); renderRuler(); saveState();
+  hideRulerPopup();
+}
+
+function rulerTrimToRange() {
+  if (!rulerRange) return;
+  const startSrc = rulerRange.start, endSrc = rulerRange.end;
+  // Trim to only keep this range - cut everything outside
+  if (startSrc > trimStart + 0.05) {
+    cuts.push({ start: trimStart, end: startSrc });
+  }
+  if (endSrc < trimEnd - 0.05) {
+    cuts.push({ start: endSrc, end: trimEnd });
+  }
+  mergeCuts();
+  renderSplitMarkers(); renderCutTrack(); renderRuler(); saveState();
+  hideRulerPopup();
+}
+
+function rulerCancelRange() {
+  hideRulerPopup();
+}
+
+// Drag playhead
+$('playhead').addEventListener('mousedown', (e) => {
+  e.stopPropagation();
+  const tracks = $('tracks');
+  const seekFromX = (clientX) => {
+    const rect = tracks.getBoundingClientRect();
+    const labelW = 56;
+    const pct = Math.max(0, Math.min(1, (clientX - rect.left - labelW) / (rect.width - labelW)));
+    video.currentTime = pct * getDur();
+  };
+  seekFromX(e.clientX);
+  const onMove = (ev) => { seekFromX(ev.clientX); };
+  const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+});
+
+// ═══════ Action Bar Functions ═══════
+function duplicateSelectedSub() {
+  if (!selectedSub) return;
+  const dur = selectedSub.end - selectedSub.start;
+  const ns = { ...selectedSub, id: Date.now(), start: selectedSub.end, end: selectedSub.end + dur, text: selectedSub.text };
+  if (ns.end > getDur()) ns.end = getDur();
+  subtitles.push(ns); subtitles.sort((a,b) => a.start - b.start);
+  selectedSub = ns; renderSubTrack(); showToolProps('sub-edit'); saveState();
+}
+function setSpeedPrompt() {
+  const speeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3];
+  speedIdx = (speedIdx + 1) % speeds.length;
+  playbackSpeed = speeds[speedIdx];
+  video.playbackRate = playbackSpeed;
+  $('speedBtn').textContent = playbackSpeed + 'x';
+}
+function toggleCursorRender() {
+  S.cursorVisible = !S.cursorVisible;
+  const btn = $('cursorToggleBtn');
+  if (btn) btn.classList.toggle('active', S.cursorVisible);
+}
+// Init cursor toggle state
+setTimeout(() => { const btn = $('cursorToggleBtn'); if(btn) btn.classList.toggle('active', S.cursorVisible); }, 100);
+
+// ═══════ Split & Transitions ═══════
+function splitAtPlayhead() {
+  const t = video.currentTime;
+  if (t <= trimStart + 0.1 || t >= trimEnd - 0.1) return;
+  // Avoid duplicate splits
+  if (splitPoints.some(sp => Math.abs(sp - t) < 0.1)) return;
+  splitPoints.push(t);
+  splitPoints.sort((a,b) => a - b);
+  selectedSegIdx = -1;
+  renderSplitMarkers();
+  renderSegments();
+  renderRuler();
+  saveState();
+}
+
+function addTransition(splitTime, type) {
+  const key = splitTime.toFixed(3);
+  if (transitions[key]) {
+    // Cycle through types or remove
+    const types = ['fade','wipe','none'];
+    const curIdx = types.indexOf(transitions[key].type);
+    const nextType = types[(curIdx+1)%types.length];
+    if (nextType === 'none') { delete transitions[key]; }
+    else { transitions[key].type = nextType; }
+  } else {
+    transitions[key] = { type: type || 'fade', duration: 0.5 };
+  }
+  renderSplitMarkers();
+  saveState();
+}
+
+function renderSplitMarkers() {
+  const track = $('videoTrack');
+  track.querySelectorAll('.tl-split,.tl-transition').forEach(e => e.remove());
+  const dur = getDur(); if (!dur) return;
+  splitPoints.forEach(sp => {
+    // Split marker
+    const el = document.createElement('div');
+    el.className = 'tl-split';
+    el.style.left = (sp / dur * 100) + '%';
+    el.addEventListener('click', (e) => { e.stopPropagation(); addTransition(sp, 'fade'); });
+    el.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); splitPoints = splitPoints.filter(s => s !== sp); delete transitions[sp.toFixed(3)]; renderSplitMarkers(); saveState(); });
+    el.title = '클릭: 트랜지션 추가/변경 | 우클릭: 분할 삭제';
+    track.appendChild(el);
+    // Transition badge
+    const tr = transitions[sp.toFixed(3)];
+    if (tr) {
+      const badge = document.createElement('div');
+      badge.className = 'tl-transition';
+      const tDur = tr.duration || 0.5;
+      badge.style.left = ((sp - tDur/2) / dur * 100) + '%';
+      badge.style.width = (tDur / dur * 100) + '%';
+      badge.textContent = tr.type === 'fade' ? '◐' : '◧';
+      badge.title = `${tr.type} (${tDur}s) - 클릭하여 변경`;
+      badge.addEventListener('click', (e) => { e.stopPropagation(); addTransition(sp); });
+      track.appendChild(badge);
+    }
+  });
+}
+
+// ═══════ Undo / Redo ═══════
+function saveState() {
+  const state = {
+    subtitles: JSON.parse(JSON.stringify(subtitles)),
+    cuts: JSON.parse(JSON.stringify(cuts)),
+    splitPoints: [...splitPoints],
+    transitions: JSON.parse(JSON.stringify(transitions)),
+    trimStart, trimEnd, selectedBg,
+    S: {...S},
+  };
+  history = history.slice(0, historyIdx + 1);
+  history.push(state);
+  historyIdx++;
+  if (history.length > MAX_HISTORY) { history.shift(); historyIdx--; }
+  updateHistoryBtns();
+}
+function undo() {
+  if (historyIdx <= 0) return;
+  historyIdx--;
+  restoreState(history[historyIdx]);
+}
+function redo() {
+  if (historyIdx >= history.length - 1) return;
+  historyIdx++;
+  restoreState(history[historyIdx]);
+}
+function restoreState(state) {
+  subtitles = JSON.parse(JSON.stringify(state.subtitles));
+  cuts = JSON.parse(JSON.stringify(state.cuts));
+  splitPoints = [...state.splitPoints];
+  transitions = JSON.parse(JSON.stringify(state.transitions));
+  trimStart = state.trimStart; trimEnd = state.trimEnd;
+  selectedBg = state.selectedBg;
+  Object.assign(S, state.S);
+  selectedSub = null; selectedSegIdx = -1;
+  renderSubTrack(); renderCutTrack(); renderSplitMarkers(); renderSegments();
+  updateTrimUI(); showToolProps(currentTool);
+  updateHistoryBtns();
+}
+function updateHistoryBtns() {
+  const ub=$('undoBtn'), rb=$('redoBtn');
+  if(ub) ub.disabled = historyIdx <= 0;
+  if(rb) rb.disabled = historyIdx >= history.length - 1;
+}
+$('undoBtn').addEventListener('click', undo);
+$('redoBtn').addEventListener('click', redo);
+
+// ═══════ Export ═══════
+// ═══════ Cuts (구간 삭제) ═══════
+function isInCutRegion(t) {
+  return cuts.some(c => t >= c.start && t < c.end);
+}
+
+function getNextNonCutTime(t) {
+  for (const c of cuts) {
+    if (t >= c.start && t < c.end) return c.end;
+  }
+  return t;
+}
+
+function getEffectiveDuration() {
+  let total = trimEnd - trimStart;
+  for (const c of cuts) {
+    const cs = Math.max(c.start, trimStart);
+    const ce = Math.min(c.end, trimEnd);
+    if (ce > cs) total -= (ce - cs);
+  }
+  return Math.max(0.01, total);
+}
+
+// ═══════ Effective Time Mapping ═══════
+// Source time → effective time (cuts removed)
+function sourceToEffective(t) {
+  let eff = t - trimStart;
+  for (const c of cuts) {
+    const cs = Math.max(c.start, trimStart);
+    const ce = Math.min(c.end, trimEnd);
+    if (ce <= cs) continue;
+    if (t > ce) eff -= (ce - cs);
+    else if (t > cs) eff -= (t - cs);
+  }
+  return Math.max(0, eff);
+}
+// Effective time → source time
+function effectiveToSource(eff) {
+  let src = trimStart + eff;
+  for (const c of cuts) {
+    const cs = Math.max(c.start, trimStart);
+    const ce = Math.min(c.end, trimEnd);
+    if (ce <= cs) continue;
+    if (src >= cs) src += (ce - cs);
+  }
+  return Math.min(src, trimEnd);
+}
+
+function renderCutTrack() {
+  $('videoTrack').querySelectorAll('.tl-cut,.tl-cut-recording').forEach(e => e.remove());
+  renderSegments();
+  renderRuler();
+  updateTrimUI();
+}
+
+function mergeCuts() {
+  cuts.sort((a, b) => a.start - b.start);
+  for (let i = cuts.length - 1; i > 0; i--) {
+    if (cuts[i].start <= cuts[i-1].end) {
+      cuts[i-1].end = Math.max(cuts[i-1].end, cuts[i].end);
+      cuts.splice(i, 1);
+    }
+  }
+}
+
+// Skip over cut regions during playback
+video.addEventListener('timeupdate', () => {
+  if (!video.paused && cuts.length > 0) {
+    const t = video.currentTime;
+    const next = getNextNonCutTime(t);
+    if (next !== t) video.currentTime = next;
+  }
+});
+
+async function doExport(){
+  const fmt = $('expFormat')?.value || 'webm';
+  if (fmt === 'gif') return doExportGif();
+  const isMP4 = fmt === 'mp4';
+  const btn=$('exportBtn');const st=$('exportStatus');btn.disabled=true;st.textContent='준비 중...';
+  const vw=video.videoWidth,vh=video.videoHeight;
+  const off=document.createElement('canvas');const oc=off.getContext('2d');
+  off.width=vw;off.height=vh;
+  const es=off.captureStream(30);
+  if(video.captureStream)video.captureStream().getAudioTracks().forEach(t=>es.addTrack(t));
+  const br=parseInt($('expBitrate')?.value||16000000);
+  const rec=new MediaRecorder(es,{mimeType:'video/webm;codecs=vp9,opus',videoBitsPerSecond:br});
+  const chunks=[];rec.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data);};
+  rec.onstop=async()=>{
+    const blob=new Blob(chunks,{type:'video/webm'});
+    const buf=await blob.arrayBuffer();
+
+    if (isMP4) {
+      // Save temp WebM, convert to MP4 via ffmpeg
+      st.textContent = 'MP4 변환 중...';
+      const tempPath = await window.electronAPI.saveVideo(buf); // save as temp webm
+      const fp = await window.electronAPI.saveVideoDialog(exportFileName('mp4'));
+      if (fp) {
+        try {
+          await window.electronAPI.convertToMp4({ inputPath: tempPath, outputPath: fp });
+          st.textContent = 'MP4 저장 완료!';
+        } catch(e) {
+          st.textContent = 'MP4 변환 실패: ' + e;
+        }
+      } else {
+        st.textContent = '취소됨';
+      }
+    } else {
+      const fp = await window.electronAPI.saveVideoDialog(exportFileName('webm'));
+      if(fp){await window.electronAPI.writeFile({filePath:fp,buffer:buf});st.textContent='완료!';}
+      else st.textContent='취소됨';
+    }
+    btn.disabled=false;setTimeout(()=>{st.textContent='';},3000);
+  };
+  curX=0.5;curY=0.5;curScale=1;video.currentTime=trimStart;
+  await new Promise(r=>{video.onseeked=r;});rec.start(100);video.play();
+  function ef(){if(video.ended||video.paused||video.currentTime>=trimEnd){video.pause();rec.stop();return;}
+    // Skip cut regions during export
+    if(isInCutRegion(video.currentTime)){const nt=getNextNonCutTime(video.currentTime);if(nt>=trimEnd){video.pause();rec.stop();return;}video.currentTime=nt;return requestAnimationFrame(ef);}
+    const ms2=video.currentTime*1000;let ts2=1,tx2=0.5,ty2=0.5;const kf2=getKfAt(video.currentTime);
+    if(kf2&&zoomKeyframes.length){ts2=kf2.zoom;tx2=kf2.x;ty2=kf2.y;}else if(S.autoZoom&&cursorPositions.length){const c2=getCursorAt(ms2);tx2=c2.x;ty2=c2.y;ts2=cursorMoving(ms2)?S.zoomLevel:1;}
+    curScale+=(ts2-curScale)*S.zoomSmooth*0.3;curX+=(tx2-curX)*Math.max(S.zoomSmooth*5,0.08);curY+=(ty2-curY)*Math.max(S.zoomSmooth*5,0.08);
+    const sc2=curScale,sw2=vw/sc2,sh2=vh/sc2;let sx2=curX*vw-sw2/2,sy2=curY*vh-sh2/2;sx2=Math.max(0,Math.min(vw-sw2,sx2));sy2=Math.max(0,Math.min(vh-sh2,sy2));
+    oc.clearRect(0,0,vw,vh);oc.filter=`brightness(${S.brightness}) contrast(${S.contrast}) saturate(${S.saturate})`;oc.drawImage(video,sx2,sy2,sw2,sh2,0,0,vw,vh);oc.filter='none';
+    // Highlight effect in export
+    if(S.highlight&&sc2>1.05&&cursorPositions.length>0){
+      const hx=((curX*vw-sx2)/sw2)*vw,hy=((curY*vh-sy2)/sh2)*vh;
+      const str=S.highlightStrength*Math.min(1,sc2-1);
+      const sr=Math.min(vw,vh)*0.35;
+      const hg=oc.createRadialGradient(hx,hy,sr*0.3,hx,hy,sr*1.2);
+      hg.addColorStop(0,'rgba(0,0,0,0)');hg.addColorStop(0.6,`rgba(0,0,0,${str*0.3})`);hg.addColorStop(1,`rgba(0,0,0,${str})`);
+      oc.fillStyle=hg;oc.fillRect(0,0,vw,vh);
+    }
+    // Cursor in export
+    if(S.cursorVisible&&cursorPositions.length>0){
+      const cp2=getCursorAt(ms2);const ecx=((cp2.x*vw-sx2)/sw2)*vw,ecy=((cp2.y*vh-sy2)/sh2)*vh;
+      if(ecx>=0&&ecx<=vw&&ecy>=0&&ecy<=vh){
+        const cs2=40*S.cursorSize;oc.save();oc.translate(ecx,ecy);
+        oc.beginPath();oc.moveTo(0,0);oc.lineTo(0,cs2*1.4);oc.lineTo(cs2*0.35,cs2*1.05);oc.lineTo(cs2*0.75,cs2*1.65);oc.lineTo(cs2*0.95,cs2*1.5);oc.lineTo(cs2*0.55,cs2*0.9);oc.lineTo(cs2*1.0,cs2*0.85);oc.closePath();
+        oc.shadowColor='rgba(0,0,0,0.4)';oc.shadowBlur=6;oc.shadowOffsetX=2;oc.shadowOffsetY=2;
+        oc.fillStyle='#fff';oc.fill();oc.shadowBlur=0;oc.strokeStyle='#000';oc.lineWidth=cs2*0.07;oc.stroke();oc.restore();
+      }
+    }
+    subtitles.filter(s=>video.currentTime>=s.start&&video.currentTime<=s.end).forEach(sub=>{
+      const fs2=S.subFontSize*2,py2=vh*(S.subPosY/100),cx3=vw/2;const a2=getSubAnim(sub,video.currentTime);
+      oc.save();oc.font=`${S.subWeight} ${fs2}px -apple-system,sans-serif`;oc.textAlign='center';oc.textBaseline='middle';oc.globalAlpha=Math.max(0,(sub.anim==='fadeIn'||sub.anim==='slideUp'||sub.anim==='popIn')?a2.fi*a2.fo:1);
+      sub.text.split('\n').forEach((l,i)=>{let dl=l;if(sub.anim==='typewriter')dl=l.substring(0,Math.floor(a2.p*l.length*1.5));const lh2=fs2*1.4,ly2=py2+i*lh2;
+        if(S.subBg){const tw2=oc.measureText(dl).width;rrect(oc,cx3-tw2/2-20,ly2-lh2/2-6,tw2+40,lh2+12,(lh2+12)/2);oc.fillStyle=S.subBgColor+Math.round(S.subBgAlpha*255).toString(16).padStart(2,'0');oc.fill();}
+        if(S.subOutline){oc.strokeStyle=S.subOutlineColor;oc.lineWidth=S.subOutlineWidth*2;oc.lineJoin='round';oc.strokeText(dl,cx3,ly2);}
+        oc.fillStyle=S.subColor;oc.fillText(dl,cx3,ly2);});oc.restore();});
+    st.textContent=`내보내기 중... ${Math.round((video.currentTime-trimStart)/(trimEnd-trimStart)*100)}%`;
+    requestAnimationFrame(ef);}
+  ef();
+}
+
+// ═══════ Helpers ═══════
+function fmtT(s){if(!isFinite(s)||isNaN(s))return '00:00.0';return `${Math.floor(s/60).toString().padStart(2,'0')}:${Math.floor(s%60).toString().padStart(2,'0')}.${Math.floor((s%1)*10)}`;}
+function exportFileName(ext){const d=new Date();const ts=`${d.getFullYear()}${(d.getMonth()+1).toString().padStart(2,'0')}${d.getDate().toString().padStart(2,'0')}_${d.getHours().toString().padStart(2,'0')}${d.getMinutes().toString().padStart(2,'0')}${d.getSeconds().toString().padStart(2,'0')}`;return `octo-${ts}.${ext}`;}
+
+// ═══════ GIF Export ═══════
+async function doExportGif(){
+  const btn=$('exportBtn');const st=$('exportStatus');
+  btn.disabled=true;st.textContent='GIF 준비 중...';
+
+  const gifFps = parseInt($('gifFps')?.value || 15);
+  const gifScale = parseFloat($('gifScale')?.value || 0.5);
+  const gifQuality = parseInt($('gifQuality')?.value || 10);
+  const vw = video.videoWidth, vh = video.videoHeight;
+
+  const gw = Math.round(vw * gifScale);
+  const gh = Math.round(vh * gifScale);
+  const frameDelay = Math.round(1000 / gifFps);
+
+  const off = document.createElement('canvas');
+  const oc = off.getContext('2d');
+  off.width = gw; off.height = gh;
+
+  // Collect frames by stepping through the video
+  const frames = [];
+  const duration = trimEnd - trimStart;
+  const totalFrames = Math.ceil(duration * gifFps);
+
+  st.textContent = `프레임 캡처 중... 0/${totalFrames}`;
+
+  // Reset zoom state
+  curX = 0.5; curY = 0.5; curScale = 1;
+
+  for (let i = 0; i < totalFrames; i++) {
+    const t = trimStart + (i / gifFps);
+    video.currentTime = t;
+    await new Promise(r => { video.onseeked = r; });
+    // Small delay for frame to render
+    await new Promise(r => setTimeout(r, 30));
+
+    // Update zoom state
+    const ms = t * 1000;
+    let ts=1,tx=0.5,ty=0.5;
+    if(S.autoZoom&&cursorPositions.length>0){
+      const c=getCursorAt(ms);tx=c.x;ty=c.y;
+      ts=cursorMoving(ms)?S.zoomLevel:1;
+    }
+    curScale+=(ts-curScale)*S.zoomSmooth*0.3*3; // faster convergence for export
+    curX+=(tx-curX)*Math.max(S.zoomSmooth*5,0.08)*3;
+    curY+=(ty-curY)*Math.max(S.zoomSmooth*5,0.08)*3;
+
+    const sc=curScale,sW=vw/sc,sH=vh/sc;
+    let sX=curX*vw-sW/2,sY=curY*vh-sH/2;
+    sX=Math.max(0,Math.min(vw-sW,sX));sY=Math.max(0,Math.min(vh-sH,sY));
+
+    oc.clearRect(0,0,gw,gh);
+    oc.filter=`brightness(${S.brightness}) contrast(${S.contrast}) saturate(${S.saturate})`;
+    oc.drawImage(video,sX,sY,sW,sH,0,0,gw,gh);
+    oc.filter='none';
+
+    // Highlight effect in GIF export
+    if(S.highlight&&sc>1.05&&cursorPositions.length>0){
+      const hx=((curX*vw-sX)/sW)*gw,hy=((curY*vh-sY)/sH)*gh;
+      const str=S.highlightStrength*Math.min(1,sc-1);
+      const sr=Math.min(gw,gh)*0.35;
+      const hg=oc.createRadialGradient(hx,hy,sr*0.3,hx,hy,sr*1.2);
+      hg.addColorStop(0,'rgba(0,0,0,0)');hg.addColorStop(0.6,`rgba(0,0,0,${str*0.3})`);hg.addColorStop(1,`rgba(0,0,0,${str})`);
+      oc.fillStyle=hg;oc.fillRect(0,0,gw,gh);
+    }
+
+    // Cursor in GIF
+    if(S.cursorVisible&&cursorPositions.length>0){
+      const cpg=getCursorAt(ms);const gcx=((cpg.x*vw-sX)/sW)*gw,gcy=((cpg.y*vh-sY)/sH)*gh;
+      if(gcx>=0&&gcx<=gw&&gcy>=0&&gcy<=gh){
+        const gcs=20*S.cursorSize*gifScale;oc.save();oc.translate(gcx,gcy);
+        oc.beginPath();oc.moveTo(0,0);oc.lineTo(0,gcs*1.4);oc.lineTo(gcs*0.35,gcs*1.05);oc.lineTo(gcs*0.75,gcs*1.65);oc.lineTo(gcs*0.95,gcs*1.5);oc.lineTo(gcs*0.55,gcs*0.9);oc.lineTo(gcs*1.0,gcs*0.85);oc.closePath();
+        oc.fillStyle='#fff';oc.fill();oc.strokeStyle='#000';oc.lineWidth=gcs*0.07;oc.stroke();oc.restore();
+      }
+    }
+    // Subtitles
+    subtitles.filter(s=>t>=s.start&&t<=s.end).forEach(sub=>{
+      const fs=S.subFontSize*gifScale;const py=gh*(S.subPosY/100);const cx2=gw/2;
+      const a=getSubAnim(sub,t);
+      oc.save();oc.font=`${S.subWeight} ${fs}px -apple-system,sans-serif`;
+      oc.textAlign='center';oc.textBaseline='middle';
+      oc.globalAlpha=Math.max(0,(sub.anim==='fadeIn'||sub.anim==='slideUp'||sub.anim==='popIn')?a.fi*a.fo:1);
+      sub.text.split('\n').forEach((l,li)=>{
+        let dl=l;if(sub.anim==='typewriter')dl=l.substring(0,Math.floor(a.p*l.length*1.5));
+        const lh=fs*1.4,ly=py+li*lh;
+        if(S.subBg){const tw=oc.measureText(dl).width;rrect(oc,cx2-tw/2-8,ly-lh/2-3,tw+16,lh+6,(lh+6)/2);oc.fillStyle=S.subBgColor+Math.round(S.subBgAlpha*255).toString(16).padStart(2,'0');oc.fill();}
+        if(S.subOutline){oc.strokeStyle=S.subOutlineColor;oc.lineWidth=S.subOutlineWidth*gifScale;oc.lineJoin='round';oc.strokeText(dl,cx2,ly);}
+        oc.fillStyle=S.subColor;oc.fillText(dl,cx2,ly);
+      });
+      oc.restore();
+    });
+
+    // Capture frame data
+    frames.push(oc.getImageData(0, 0, gw, gh));
+    st.textContent = `프레임 캡처 중... ${i+1}/${totalFrames}`;
+  }
+
+  // Encode GIF using gif.js
+  st.textContent = 'GIF 인코딩 중...';
+
+  const gif = new GIF({
+    workers: 2,
+    quality: gifQuality,
+    width: gw,
+    height: gh,
+    workerScript: './node_modules/gif.js/dist/gif.worker.js',
+  });
+
+  frames.forEach(frame => {
+    gif.addFrame(frame, { delay: frameDelay });
+  });
+
+  gif.on('progress', p => {
+    st.textContent = `GIF 인코딩 중... ${Math.round(p * 100)}%`;
+  });
+
+  gif.on('finished', async (blob) => {
+    const buf = await blob.arrayBuffer();
+    const fp = await window.electronAPI.saveVideoDialog(exportFileName('gif'));
+    if (fp) {
+      await window.electronAPI.writeFile({ filePath: fp, buffer: buf });
+      st.textContent = 'GIF 저장 완료!';
+    } else {
+      st.textContent = '취소됨';
+    }
+    btn.disabled = false;
+    setTimeout(() => { st.textContent = ''; }, 3000);
+  });
+
+  gif.render();
+}
+
+// Init
+try {
+  showToolProps('zoom');
+  // Save initial state for undo
+  saveState();
+  console.log('Editor initialized OK');
+} catch(e) {
+  console.error('INIT ERROR:', e.message, e.stack);
+}
+
+// Global error handler
+window.onerror = (msg, src, line, col, err) => {
+  console.error('RUNTIME ERROR:', msg, 'line:', line, err?.stack);
+};
+window.onunhandledrejection = (e) => {
+  console.error('PROMISE ERROR:', e.reason);
+};
+</script>
+</body>
+</html>
