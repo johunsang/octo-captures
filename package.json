@@ -22,7 +22,8 @@
         { "target": "dmg", "arch": ["universal"] },
         { "target": "zip", "arch": ["universal"] }
       ],
-      "identity": null
+      "identity": "hunsang jo (AZ55QRXUCH)",
+      "notarize": true
     },
     "files": [
       "main.js",
