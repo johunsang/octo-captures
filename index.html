@@ -179,6 +179,13 @@
         <select class="quality-select" id="micSelect" style="width:100%;font-size:11px;"></select>
       </div>
       <div class="option-row">
+        <label class="option-label"><span class="option-icon">📷</span> 웹캠</label>
+        <input type="checkbox" class="toggle" id="webcamToggle">
+      </div>
+      <div id="webcamSelectRow" style="display:none;margin-top:4px;">
+        <select class="quality-select" id="webcamSelect" style="width:100%;font-size:11px;"></select>
+      </div>
+      <div class="option-row">
         <label class="option-label"><span class="option-icon">🖱️</span> 커서 추적</label>
         <input type="checkbox" class="toggle" id="cursorToggle" checked>
       </div>
@@ -208,6 +215,9 @@
     let isRecording = false;
     let recordingTimer = null;
     let recordingSeconds = 0;
+    let webcamRecorder = null;
+    let webcamChunks = [];
+    let webcamStream = null;
 
     const sourceList = document.getElementById('sourceList');
     const recordBtn = document.getElementById('recordBtn');
@@ -218,6 +228,38 @@
     const micSelectRow = document.getElementById('micSelectRow');
     const cursorToggle = document.getElementById('cursorToggle');
     const qualitySelect = document.getElementById('qualitySelect');
+    const webcamToggle = document.getElementById('webcamToggle');
+    const webcamSelect = document.getElementById('webcamSelect');
+    const webcamSelectRow = document.getElementById('webcamSelectRow');
+
+    // Webcam toggle
+    webcamToggle.addEventListener('change', async () => {
+      if (webcamToggle.checked) {
+        webcamSelectRow.style.display = 'block';
+        await loadWebcamDevices();
+      } else {
+        webcamSelectRow.style.display = 'none';
+      }
+    });
+
+    async function loadWebcamDevices() {
+      try {
+        const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        tempStream.getTracks().forEach(t => t.stop());
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const cams = devices.filter(d => d.kind === 'videoinput');
+        webcamSelect.innerHTML = '';
+        cams.forEach(cam => {
+          const opt = document.createElement('option');
+          opt.value = cam.deviceId;
+          opt.textContent = cam.label || `카메라 ${webcamSelect.length + 1}`;
+          webcamSelect.appendChild(opt);
+        });
+      } catch (e) {
+        console.warn('Failed to load webcam devices:', e);
+        webcamSelect.innerHTML = '<option value="">카메라 접근 실패</option>';
+      }
+    }
 
     // Mic toggle → show/hide mic selector and load devices
     micToggle.addEventListener('change', async () => {
@@ -257,8 +299,11 @@
         sourceList.innerHTML = `
           <div style="text-align:center; padding:30px 10px; color:#666; font-size:13px; line-height:1.6;">
             화면 녹화 권한이 필요합니다.<br>
-            <strong>시스템 설정 → 개인정보 보호 및 보안 → 화면 녹화</strong>에서<br>
-            앱을 허용 후 새로고침 해주세요.
+            아래 버튼을 눌러 권한을 허용해 주세요.
+            <div style="margin-top:12px;">
+              <button onclick="window.electronAPI.openScreenSettings()" style="padding:8px 16px;background:linear-gradient(135deg,#667eea,#764ba2);color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">시스템 설정 열기</button>
+            </div>
+            <div style="margin-top:8px;font-size:11px;color:#555;">허용 후 ↻ 새로고침을 눌러주세요</div>
           </div>`;
         return;
       }
@@ -353,6 +398,13 @@
             if (micStream) micStream.getTracks().forEach(t => t.stop());
             clearInterval(recordingTimer);
 
+            // Stop webcam
+            let webcamFilePath = null;
+            if (webcamRecorder && webcamRecorder.state !== 'inactive') {
+              await new Promise(resolve => { webcamRecorder.onstop = resolve; webcamRecorder.stop(); });
+            }
+            if (webcamStream) { webcamStream.getTracks().forEach(t => t.stop()); }
+
             // Get cursor data
             let cursorPositions = [];
             if (cursorToggle.checked) {
@@ -361,7 +413,6 @@
                 window.electronAPI.onCursorData(handler);
               });
               window.electronAPI.stopCursorTracking();
-              // Wait max 3 seconds for cursor data
               cursorPositions = await Promise.race([
                 cursorPromise,
                 new Promise(resolve => setTimeout(() => resolve([]), 3000))
@@ -382,15 +433,26 @@
             const buffer = await blob.arrayBuffer();
             const filePath = await window.electronAPI.saveVideo(buffer);
 
+            // Save webcam video
+            if (webcamChunks.length > 0) {
+              const webcamBlob = new Blob(webcamChunks, { type: 'video/webm' });
+              if (webcamBlob.size > 100) {
+                const webcamBuffer = await webcamBlob.arrayBuffer();
+                webcamFilePath = await window.electronAPI.saveWebcam(webcamBuffer);
+              }
+            }
+
             status.textContent = '저장 완료! → ' + filePath.split('/').pop();
             const recordingDuration = recordingSeconds;
             window.electronAPI.openPreview({
               filePath,
               cursorPositions,
               duration: recordingDuration,
+              webcamPath: webcamFilePath,
             });
             recordBtn.disabled = false;
             recordBtn.textContent = '녹화 시작';
+            webcamRecorder = null; webcamStream = null; webcamChunks = [];
             setTimeout(() => { status.textContent = ''; }, 5000);
           } catch (err) {
             console.error('Stop recording error:', err);
@@ -399,6 +461,23 @@
             recordBtn.textContent = '녹화 시작';
           }
         };
+
+        // Start webcam recording
+        if (webcamToggle.checked) {
+          try {
+            webcamStream = await navigator.mediaDevices.getUserMedia({
+              video: { deviceId: webcamSelect.value ? { exact: webcamSelect.value } : undefined, width: { ideal: 640 }, height: { ideal: 480 } },
+              audio: false,
+            });
+            webcamChunks = [];
+            webcamRecorder = new MediaRecorder(webcamStream, { mimeType: 'video/webm;codecs=vp9' });
+            webcamRecorder.ondataavailable = (e) => { if (e.data.size > 0) webcamChunks.push(e.data); };
+            webcamRecorder.start(1000);
+          } catch (e) {
+            console.warn('Webcam not available:', e);
+            webcamStream = null; webcamRecorder = null;
+          }
+        }
 
         // Start cursor tracking (with optional cursor hiding)
         if (cursorToggle.checked) {

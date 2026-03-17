@@ -1,4 +1,4 @@
-const { app, BrowserWindow, desktopCapturer, ipcMain, screen, globalShortcut, systemPreferences, dialog } = require('electron');
+const { app, BrowserWindow, desktopCapturer, ipcMain, screen, globalShortcut, systemPreferences, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { execSync } = require('child_process');
@@ -45,6 +45,10 @@ function createMainWindow() {
     // Request mic permission
     systemPreferences.askForMediaAccess('microphone').then((granted) => {
       console.log('Microphone permission:', granted ? 'granted' : 'denied');
+    });
+    // Request camera permission
+    systemPreferences.askForMediaAccess('camera').then((granted) => {
+      console.log('Camera permission:', granted ? 'granted' : 'denied');
     });
   }
 }
@@ -163,6 +167,20 @@ app.whenReady().then(() => {
     }
   });
 
+  ipcMain.handle('save-webcam', async (event, buffer) => {
+    try {
+      const downloadsPath = app.getPath('downloads');
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const filePath = path.join(downloadsPath, `octo-webcam-${timestamp}.webm`);
+      fs.writeFileSync(filePath, Buffer.from(buffer));
+      console.log('Webcam saved:', filePath, 'size:', buffer.byteLength);
+      return filePath;
+    } catch (e) {
+      console.error('save-webcam error:', e);
+      throw e;
+    }
+  });
+
   ipcMain.handle('save-video', async (event, buffer) => {
     try {
       const downloadsPath = app.getPath('downloads');
@@ -222,6 +240,14 @@ app.whenReady().then(() => {
 
   ipcMain.on('open-preview', (event, data) => {
     createPreviewWindow(data);
+  });
+
+  ipcMain.on('open-screen-settings', () => {
+    shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+  });
+
+  ipcMain.on('open-camera-settings', () => {
+    shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Camera');
   });
 
   globalShortcut.register('CommandOrControl+Shift+R', () => {
