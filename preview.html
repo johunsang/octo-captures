@@ -434,6 +434,7 @@
     <button class="act-btn" onclick="restoreSelectedSegment()" title="삭제 복원"><span class="act-icon">♻️</span>복원</button>
     <div class="act-sep"></div>
     <button class="act-btn" onclick="addSubAtPlayhead()" title="자막 추가 (T)"><span class="act-icon">💬</span>자막</button>
+    <button class="act-btn" onclick="captureFrame()" title="현재 프레임 캡처 (P)"><span class="act-icon">📸</span>캡처</button>
     <div class="act-sep"></div>
     <button class="act-btn" onclick="undo()" title="실행취소 (⌘Z)"><span class="act-icon">↩️</span>실행취소</button>
     <button class="act-btn" onclick="redo()" title="다시실행 (⌘⇧Z)"><span class="act-icon">↪️</span>다시실행</button>
@@ -449,7 +450,7 @@
       <span class="tc" id="tc">00:00.0 / 00:00.0</span>
       <button class="speed-btn" id="speedBtn">1x</button>
       <div class="tl-spacer"></div>
-      <span class="tl-hint"><kbd>Space</kbd> 재생 <kbd>,</kbd><kbd>.</kbd> 프레임 <kbd>S</kbd> 분할 <kbd>T</kbd> 자막 <kbd>C</kbd> 컷 <kbd>⌘Z</kbd> 실행취소</span>
+      <span class="tl-hint"><kbd>Space</kbd> 재생 <kbd>,</kbd><kbd>.</kbd> 프레임 <kbd>S</kbd> 분할 <kbd>T</kbd> 자막 <kbd>C</kbd> 컷 <kbd>P</kbd> 캡처 <kbd>⌘Z</kbd> 실행취소</span>
     </div>
     <div class="tl-ruler" id="ruler">
       <div class="tl-ruler-sel" id="rulerSel" style="display:none"></div>
@@ -878,6 +879,7 @@ function exportPropsHTML() {
         <select class="sel" id="expFormat">
           <option value="webm">WebM</option>
           <option value="mp4">MP4</option>
+          <option value="mov">MOV</option>
           <option value="gif">GIF</option>
         </select>
       </div>
@@ -892,6 +894,13 @@ function exportPropsHTML() {
       </div>
       <div class="prop-row"><span class="prop-label">비트레이트</span>
         <select class="sel" id="expBitrate"><option value="8000000">8 Mbps</option><option value="16000000" selected>16 Mbps</option><option value="32000000">32 Mbps</option></select>
+      </div>
+      <div class="prop-row"><span class="prop-label">품질</span>
+        <select class="sel" id="expQuality">
+          <option value="high">높음 (CRF 18)</option>
+          <option value="medium" selected>보통 (CRF 23)</option>
+          <option value="low">낮음 (CRF 32)</option>
+        </select>
       </div>
       <div id="gifOptions" style="display:none;margin-top:8px;">
         <div class="prop-row"><span class="prop-label">FPS</span>
@@ -908,6 +917,21 @@ function exportPropsHTML() {
     <div class="prop-group">
       <button class="export-btn" id="exportBtn" onclick="doExport()">내보내기</button>
       <div class="export-status" id="exportStatus"></div>
+    </div>
+    <div class="prop-group">
+      <div class="prop-title">자동 캡처</div>
+      <div class="prop-row"><span class="prop-label">간격 (초)</span>
+        <select class="sel" id="autoCaptureInterval">
+          <option value="0.5">0.5초</option>
+          <option value="1" selected>1초</option>
+          <option value="2">2초</option>
+          <option value="3">3초</option>
+          <option value="5">5초</option>
+          <option value="10">10초</option>
+        </select>
+      </div>
+      <button class="export-btn" id="autoCaptureBtn" onclick="startAutoCapture()" style="background:linear-gradient(135deg, var(--accent), var(--accent2));">자동 캡처 시작</button>
+      <div class="export-status" id="autoCaptureStatus"></div>
     </div>`;
 }
 
@@ -946,7 +970,7 @@ function bindProps() {
       const gifOpts = document.getElementById('gifOptions');
       const expBtn = document.getElementById('exportBtn');
       if (gifOpts) gifOpts.style.display = v === 'gif' ? 'block' : 'none';
-      const labels = { webm: 'WebM 내보내기', mp4: 'MP4 내보내기', gif: 'GIF 내보내기' };
+      const labels = { webm: 'WebM 내보내기', mp4: 'MP4 내보내기', mov: 'MOV 내보내기', gif: 'GIF 내보내기' };
       if (expBtn) expBtn.textContent = labels[v] || '내보내기';
     });
   }
@@ -1218,6 +1242,7 @@ document.addEventListener('keydown',(e)=>{
     if(si>=0){selectedSegIdx=si;deleteSelectedSegment();}
   }
   if(e.code==='KeyS'){e.preventDefault();splitAtPlayhead();}
+  if(e.code==='KeyP'){e.preventDefault();captureFrame();}
   if((e.metaKey||e.ctrlKey)&&e.code==='KeyZ'&&!e.shiftKey){e.preventDefault();undo();}
   if((e.metaKey||e.ctrlKey)&&e.code==='KeyZ'&&e.shiftKey){e.preventDefault();redo();}
   if(e.code==='Delete'||e.code==='Backspace'){
@@ -1793,10 +1818,150 @@ video.addEventListener('timeupdate', () => {
   }
 });
 
+// ═══════ Frame Capture (이미지 캡처) ═══════
+function renderFrameToCanvas(targetTime){
+  const vw=video.videoWidth,vh=video.videoHeight;
+  if(!vw||!vh) return null;
+  const off=document.createElement('canvas');
+  off.width=vw;off.height=vh;
+  const oc=off.getContext('2d');
+
+  const ms=targetTime*1000;
+  let ts=1,tx=0.5,ty=0.5;
+  const kf=getKfAt(targetTime);
+  if(kf&&zoomKeyframes.length){ts=kf.zoom;tx=kf.x;ty=kf.y;}
+  else if(S.autoZoom&&cursorPositions.length>0){
+    const c=getCursorAt(ms);tx=c.x;ty=c.y;
+    ts=cursorMoving(ms)?S.zoomLevel:1;
+  }
+  const sc=curScale,pad=S.padding,rad=S.radius;
+  const sW=vw/sc,sH=vh/sc;
+  let sX=curX*vw-sW/2,sY=curY*vh-sH/2;
+  sX=Math.max(0,Math.min(vw-sW,sX));sY=Math.max(0,Math.min(vh-sH,sY));
+
+  const W=vw,H=vh;
+  const iW=W-pad*2,iH=H-pad*2,va=vw/vh,ia=iW/iH;
+  let rW,rH,oX,oY;
+  if(va>ia){rW=iW;rH=rW/va;}else{rH=iH;rW=rH*va;}
+  oX=pad+(iW-rW)/2;oY=pad+(iH-rH)/2;
+
+  oc.clearRect(0,0,W,H);
+  if(selectedBg!=='none'&&pad>0){const c=bgColors[selectedBg];if(c){const g=oc.createLinearGradient(0,0,W,H);g.addColorStop(0,c[0]);g.addColorStop(1,c[1]);oc.fillStyle=g;oc.fillRect(0,0,W,H);}}
+  if(S.shadow&&pad>0){oc.save();oc.shadowColor='rgba(0,0,0,0.5)';oc.shadowBlur=30;oc.shadowOffsetY=8;oc.fillStyle='#000';rrect(oc,oX,oY,rW,rH,rad);oc.fill();oc.restore();}
+  oc.save();rrect(oc,oX,oY,rW,rH,rad);oc.clip();
+  oc.filter=`brightness(${S.brightness}) contrast(${S.contrast}) saturate(${S.saturate})`;
+  oc.drawImage(video,sX,sY,sW,sH,oX,oY,rW,rH);
+  oc.filter='none';
+  if(S.highlight&&sc>1.05&&cursorPositions.length>0){
+    const cx2=oX+((curX*vw-sX)/sW)*rW;const cy2=oY+((curY*vh-sY)/sH)*rH;
+    const strength=S.highlightStrength*Math.min(1,sc-1);const spotR=Math.min(rW,rH)*0.35;
+    const grad=oc.createRadialGradient(cx2,cy2,spotR*0.3,cx2,cy2,spotR*1.2);
+    grad.addColorStop(0,'rgba(0,0,0,0)');grad.addColorStop(0.6,`rgba(0,0,0,${strength*0.3})`);grad.addColorStop(1,`rgba(0,0,0,${strength})`);
+    oc.fillStyle=grad;oc.fillRect(oX,oY,rW,rH);
+  }
+  if(S.cursorVisible&&cursorPositions.length>0){
+    const cp=getCursorAt(ms);const cx2=oX+((cp.x*vw-sX)/sW)*rW;const cy2=oY+((cp.y*vh-sY)/sH)*rH;
+    if(cx2>=oX&&cx2<=oX+rW&&cy2>=oY&&cy2<=oY+rH){
+      const cSize=20*S.cursorSize*(rW/800);
+      oc.save();oc.translate(cx2,cy2);
+      oc.beginPath();oc.moveTo(0,0);oc.lineTo(0,cSize*1.4);oc.lineTo(cSize*0.35,cSize*1.05);
+      oc.lineTo(cSize*0.75,cSize*1.65);oc.lineTo(cSize*0.95,cSize*1.5);oc.lineTo(cSize*0.55,cSize*0.9);oc.lineTo(cSize*1.0,cSize*0.85);oc.closePath();
+      oc.shadowColor='rgba(0,0,0,0.4)';oc.shadowBlur=4;oc.shadowOffsetX=1;oc.shadowOffsetY=1;
+      oc.fillStyle='#ffffff';oc.fill();oc.shadowBlur=0;
+      oc.strokeStyle='#000000';oc.lineWidth=Math.max(1,cSize*0.07);oc.stroke();
+      oc.restore();
+    }
+  }
+  oc.restore();
+  if(hasWebcam&&S.webcamVisible&&webcamVideo.videoWidth>0){
+    const wcAspect=webcamVideo.videoWidth/webcamVideo.videoHeight;const wcDiam=Math.min(rW,rH)*S.webcamSize;
+    let wcW,wcH;
+    if(S.webcamShape==='circle'){wcW=wcDiam;wcH=wcDiam;}else{wcW=wcDiam*wcAspect;wcH=wcDiam;}
+    const wcX=oX+rW*S.webcamX-wcW/2;const wcY=oY+rH*S.webcamY-wcH/2;
+    oc.save();
+    if(S.webcamShape==='circle'){oc.beginPath();oc.ellipse(wcX+wcW/2,wcY+wcH/2,wcW/2,wcH/2,0,0,Math.PI*2);oc.clip();}
+    else{const r2=S.webcamShape==='rounded'?12:0;rrect(oc,wcX,wcY,wcW,wcH,r2);oc.clip();}
+    oc.drawImage(webcamVideo,wcX,wcY,wcW,wcH);oc.restore();
+    if(S.webcamBorder>0){
+      oc.save();oc.strokeStyle=S.webcamBorderColor;oc.lineWidth=S.webcamBorder;
+      if(S.webcamShape==='circle'){oc.beginPath();oc.ellipse(wcX+wcW/2,wcY+wcH/2,wcW/2,wcH/2,0,0,Math.PI*2);oc.stroke();}
+      else{const r2=S.webcamShape==='rounded'?12:0;rrect(oc,wcX,wcY,wcW,wcH,r2);oc.stroke();}
+      oc.restore();
+    }
+  }
+  return off;
+}
+
+async function captureFrame(){
+  const off = renderFrameToCanvas(video.currentTime);
+  if(!off) return;
+  const blob = await new Promise(r => off.toBlob(r, 'image/png'));
+  const buf = await blob.arrayBuffer();
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const defaultName = `octo-capture-${timestamp}.png`;
+  const filePath = await window.electronAPI.saveImageDialog(defaultName);
+  if(filePath){
+    await window.electronAPI.writeFile({filePath, buffer: buf});
+  }
+}
+
+// ═══════ Auto Capture (자동 캡처) ═══════
+let autoCaptureRunning = false;
+
+async function startAutoCapture(){
+  if(autoCaptureRunning) return;
+  const intervalSec = parseFloat($('autoCaptureInterval')?.value || 1);
+  if(isNaN(intervalSec) || intervalSec <= 0) return;
+
+  const folder = await window.electronAPI.selectFolderDialog();
+  if(!folder) return;
+
+  autoCaptureRunning = true;
+  const btn = $('autoCaptureBtn');
+  const st = $('autoCaptureStatus');
+  if(btn){btn.textContent='중지';btn.onclick=stopAutoCapture;}
+
+  video.pause();
+  let t = trimStart;
+  let count = 0;
+  const total = Math.floor((trimEnd - trimStart) / intervalSec) + 1;
+  if(st) st.textContent = `캡처 준비 중...`;
+
+  for(let i = 0; i < total && autoCaptureRunning; i++){
+    t = trimStart + i * intervalSec;
+    if(t > trimEnd) break;
+    // 삭제 구간 건너뛰기
+    if(isInCutRegion(t)){continue;}
+
+    video.currentTime = t;
+    await new Promise(r => { video.onseeked = r; });
+    // 렌더링 안정화를 위해 한 프레임 대기
+    await new Promise(r => requestAnimationFrame(r));
+
+    const off = renderFrameToCanvas(t);
+    if(!off) continue;
+    const blob = await new Promise(r => off.toBlob(r, 'image/png'));
+    const buf = await blob.arrayBuffer();
+    count++;
+    const fileName = `octo-capture-${String(count).padStart(4,'0')}.png`;
+    await window.electronAPI.writeFile({filePath: folder + '/' + fileName, buffer: buf});
+    if(st) st.textContent = `캡처 중... ${count}/${total}`;
+  }
+
+  autoCaptureRunning = false;
+  if(btn){btn.textContent='자동 캡처 시작';btn.onclick=startAutoCapture;}
+  if(st) st.textContent = count > 0 ? `완료! ${count}장 저장됨` : '캡처된 이미지 없음';
+}
+
+function stopAutoCapture(){
+  autoCaptureRunning = false;
+}
+
 async function doExport(){
   const fmt = $('expFormat')?.value || 'webm';
   if (fmt === 'gif') return doExportGif();
-  const isMP4 = fmt === 'mp4';
+  const needsConvert = fmt === 'mp4' || fmt === 'mov';
+  const quality = $('expQuality')?.value || 'medium';
   const btn=$('exportBtn');const st=$('exportStatus');btn.disabled=true;st.textContent='준비 중...';
   const vw=video.videoWidth,vh=video.videoHeight;
   const off=document.createElement('canvas');const oc=off.getContext('2d');
@@ -1810,17 +1975,16 @@ async function doExport(){
     const blob=new Blob(chunks,{type:'video/webm'});
     const buf=await blob.arrayBuffer();
 
-    if (isMP4) {
-      // Save temp WebM, convert to MP4 via ffmpeg
-      st.textContent = 'MP4 변환 중...';
-      const tempPath = await window.electronAPI.saveVideo(buf); // save as temp webm
-      const fp = await window.electronAPI.saveVideoDialog(exportFileName('mp4'));
+    if (needsConvert) {
+      st.textContent = `${fmt.toUpperCase()} 변환 중...`;
+      const tempPath = await window.electronAPI.saveVideo(buf);
+      const fp = await window.electronAPI.saveVideoDialog(exportFileName(fmt));
       if (fp) {
         try {
-          await window.electronAPI.convertToMp4({ inputPath: tempPath, outputPath: fp });
-          st.textContent = 'MP4 저장 완료!';
+          await window.electronAPI.convertVideo({ inputPath: tempPath, outputPath: fp, format: fmt, quality });
+          st.textContent = `${fmt.toUpperCase()} 저장 완료!`;
         } catch(e) {
-          st.textContent = 'MP4 변환 실패: ' + e;
+          st.textContent = `${fmt.toUpperCase()} 변환 실패: ` + e;
         }
       } else {
         st.textContent = '취소됨';

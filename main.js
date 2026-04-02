@@ -200,6 +200,7 @@ app.whenReady().then(() => {
     const filterMap = {
       gif: [{ name: 'GIF Image', extensions: ['gif'] }],
       mp4: [{ name: 'MP4 Video', extensions: ['mp4'] }],
+      mov: [{ name: 'MOV Video', extensions: ['mov'] }],
       webm: [{ name: 'WebM Video', extensions: ['webm'] }],
     };
     const filters = filterMap[ext] || filterMap.webm;
@@ -211,29 +212,93 @@ app.whenReady().then(() => {
     return result.filePath || null;
   });
 
+  ipcMain.handle('select-folder-dialog', async () => {
+    const result = await dialog.showOpenDialog(previewWindow || mainWindow, {
+      title: '저장 폴더 선택',
+      defaultPath: app.getPath('downloads'),
+      properties: ['openDirectory', 'createDirectory'],
+    });
+    return (result.filePaths && result.filePaths[0]) || null;
+  });
+
+  ipcMain.handle('save-image-dialog', async (event, defaultName) => {
+    const result = await dialog.showSaveDialog(previewWindow || mainWindow, {
+      title: '이미지 저장',
+      defaultPath: path.join(app.getPath('downloads'), defaultName || 'octo-capture.png'),
+      filters: [{ name: 'PNG Image', extensions: ['png'] }],
+    });
+    return result.filePath || null;
+  });
+
   ipcMain.handle('write-file', async (event, { filePath, buffer }) => {
     fs.writeFileSync(filePath, Buffer.from(buffer));
     return true;
   });
 
-  // Convert WebM to MP4 using ffmpeg
+  // Find ffmpeg binary
+  function findFfmpeg() {
+    const candidates = [
+      'ffmpeg',
+      '/usr/local/bin/ffmpeg',
+      '/opt/homebrew/bin/ffmpeg',
+      '/usr/bin/ffmpeg',
+      path.join(process.resourcesPath || '', 'ffmpeg'),
+    ];
+    for (const p of candidates) {
+      try { execSync(`"${p}" -version`, { stdio: 'ignore' }); return p; } catch(e) {}
+    }
+    return null;
+  }
+
+  // Convert WebM to MP4/MOV using ffmpeg
+  ipcMain.handle('convert-video', async (event, { inputPath, outputPath, format, quality }) => {
+    const { execFile } = require('child_process');
+    const ffmpegPath = findFfmpeg();
+    if (!ffmpegPath) {
+      throw new Error('ffmpeg를 찾을 수 없습니다. brew install ffmpeg로 설치해주세요.');
+    }
+    // quality: 'high' (crf 18), 'medium' (crf 23), 'low' (crf 32)
+    const crfMap = { high: '18', medium: '23', low: '32' };
+    const crf = crfMap[quality] || '23';
+    const args = ['-y', '-i', inputPath];
+    if (format === 'mov') {
+      args.push('-c:v', 'libx264', '-preset', 'fast', '-crf', crf,
+                '-c:a', 'aac', '-b:a', '128k',
+                '-f', 'mov', '-movflags', '+faststart');
+    } else {
+      args.push('-c:v', 'libx264', '-preset', 'fast', '-crf', crf,
+                '-c:a', 'aac', '-b:a', '128k',
+                '-movflags', '+faststart');
+    }
+    args.push(outputPath);
+    return new Promise((resolve, reject) => {
+      execFile(ffmpegPath, args, (err, stdout, stderr) => {
+        if (err) {
+          console.error('ffmpeg error:', stderr);
+          reject(err.message);
+        } else {
+          console.log(`${format.toUpperCase()} conversion done:`, outputPath);
+          resolve(outputPath);
+        }
+      });
+    });
+  });
+
+  // Legacy handler for backwards compat
   ipcMain.handle('convert-to-mp4', async (event, { inputPath, outputPath }) => {
     const { execFile } = require('child_process');
+    const ffmpegPath = findFfmpeg();
+    if (!ffmpegPath) throw new Error('ffmpeg not found');
     return new Promise((resolve, reject) => {
-      execFile('ffmpeg', [
+      execFile(ffmpegPath, [
         '-y', '-i', inputPath,
         '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
         '-c:a', 'aac', '-b:a', '128k',
         '-movflags', '+faststart',
         outputPath
       ], (err, stdout, stderr) => {
-        if (err) {
-          console.error('ffmpeg error:', stderr);
-          reject(err.message);
-        } else {
-          console.log('MP4 conversion done:', outputPath);
-          resolve(outputPath);
-        }
+        if (err) { console.error('ffmpeg error:', stderr); reject(err.message); }
+        else { resolve(outputPath); }
       });
     });
   });
