@@ -243,6 +243,9 @@ app.whenReady().then(() => {
       '/opt/homebrew/bin/ffmpeg',
       '/usr/bin/ffmpeg',
       path.join(process.resourcesPath || '', 'ffmpeg'),
+      // Windows paths
+      'C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe',
+      path.join(process.resourcesPath || '', 'ffmpeg.exe'),
     ];
     for (const p of candidates) {
       try { execSync(`"${p}" -version`, { stdio: 'ignore' }); return p; } catch(e) {}
@@ -308,11 +311,19 @@ app.whenReady().then(() => {
   });
 
   ipcMain.on('open-screen-settings', () => {
-    shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+    if (process.platform === 'darwin') {
+      shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+    } else if (process.platform === 'win32') {
+      shell.openExternal('ms-settings:privacy-broadfilesystemaccess');
+    }
   });
 
   ipcMain.on('open-camera-settings', () => {
-    shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Camera');
+    if (process.platform === 'darwin') {
+      shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Camera');
+    } else if (process.platform === 'win32') {
+      shell.openExternal('ms-settings:privacy-webcam');
+    }
   });
 
   globalShortcut.register('CommandOrControl+Shift+R', () => {
