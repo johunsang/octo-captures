@@ -19,4 +19,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onLoadVideo: (callback) => ipcRenderer.on('load-video', (event, data) => callback(data)),
   openScreenSettings: () => ipcRenderer.send('open-screen-settings'),
   openCameraSettings: () => ipcRenderer.send('open-camera-settings'),
+  // Auto-mouse control for script replay
+  autoMouseMove: (pos) => ipcRenderer.send('auto-mouse-move', pos),
+  autoMouseClick: (pos) => ipcRenderer.send('auto-mouse-click', pos),
+  autoMouseScroll: (pos) => ipcRenderer.send('auto-mouse-scroll', pos),
+  getMousePosition: () => ipcRenderer.invoke('get-mouse-position'),
 });

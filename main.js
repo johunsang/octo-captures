@@ -7,6 +7,7 @@ let mainWindow;
 let previewWindow;
 let cursorTracker = null;
 let cursorData = [];
+let clickData = [];
 let recordingStartTime = 0;
 
 let originalCursorSize = null;
@@ -39,36 +40,129 @@ function createMainWindow() {
 
   mainWindow.loadFile('index.html');
 
-  if (process.platform === 'darwin') {
-    const screenStatus = systemPreferences.getMediaAccessStatus('screen');
-    console.log('Screen recording permission:', screenStatus);
-    // Request mic permission
-    systemPreferences.askForMediaAccess('microphone').then((granted) => {
-      console.log('Microphone permission:', granted ? 'granted' : 'denied');
-    });
-    // Request camera permission
-    systemPreferences.askForMediaAccess('camera').then((granted) => {
-      console.log('Camera permission:', granted ? 'granted' : 'denied');
-    });
-  }
+  const screenStatus = systemPreferences.getMediaAccessStatus('screen');
+  console.log('Screen recording permission:', screenStatus);
+  systemPreferences.askForMediaAccess('microphone').then((granted) => {
+    console.log('Microphone permission:', granted ? 'granted' : 'denied');
+  });
+  systemPreferences.askForMediaAccess('camera').then((granted) => {
+    console.log('Camera permission:', granted ? 'granted' : 'denied');
+  });
 }
 
-function startCursorTracking() {
+let clickMonitorProcess = null;
+
+function getRecordingBounds(sourceId) {
+  if (sourceId && sourceId.startsWith('screen:')) {
+    // screen:N:0 → find the Nth display
+    const displayIdx = parseInt(sourceId.split(':')[1]) || 0;
+    const displays = screen.getAllDisplays();
+    // desktopCapturer assigns IDs matching display index
+    const display = displays[displayIdx] || screen.getPrimaryDisplay();
+    return display.bounds;
+  }
+  // Window or unknown source → use the display the cursor is on at start
+  const cursorPoint = screen.getCursorScreenPoint();
+  const display = screen.getDisplayNearestPoint(cursorPoint);
+  return display.bounds;
+}
+
+function startCursorTracking(options) {
   cursorData = [];
+  clickData = [];
   recordingStartTime = Date.now();
-  // Use bounds (includes position for multi-monitor) with correct coordinates
-  const primaryDisplay = screen.getPrimaryDisplay();
-  const bounds = primaryDisplay.bounds;
+
+  const sourceId = options && options.sourceId;
+  const bounds = getRecordingBounds(sourceId);
+  console.log('Cursor tracking bounds:', bounds, 'source:', sourceId);
 
   cursorTracker = setInterval(() => {
     const point = screen.getCursorScreenPoint();
-    // Normalize relative to the display bounds
+    // Normalize relative to the recording display bounds
     cursorData.push({
       t: Date.now() - recordingStartTime,
       x: (point.x - bounds.x) / bounds.width,
       y: (point.y - bounds.y) / bounds.height,
     });
   }, 33);
+
+  // Start mouse click monitor (macOS)
+  startClickMonitor(bounds);
+}
+
+function startClickMonitor(bounds) {
+  try {
+    const { spawn } = require('child_process');
+    // Swift script that monitors global mouse clicks via CGEvent
+    const swiftCode = `
+import Cocoa
+let mask: CGEventMask = (1 << CGEventType.leftMouseDown.rawValue) | (1 << CGEventType.rightMouseDown.rawValue)
+guard let tap = CGEvent.tapCreate(
+  tap: .cgSessionEventTap,
+  place: .headInsertEventTap,
+  options: .listenOnly,
+  eventsOfInterest: mask,
+  callback: { proxy, type, event, refcon -> Unmanaged<CGEvent>? in
+    let loc = event.location
+    let btn = (type == .leftMouseDown) ? "left" : "right"
+    print("CLICK:\\(loc.x),\\(loc.y),\\(btn)", terminator: "\\n")
+    fflush(stdout)
+    return Unmanaged.passRetained(event)
+  },
+  userInfo: nil
+) else {
+  fputs("ERR:no_tap_permission\\n", stderr)
+  exit(1)
+}
+let runLoopSource = CFMachPortCreateRunLoopSource(nil, tap, 0)
+CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
+CGEvent.tapEnable(tap: tap, enable: true)
+CFRunLoopRun()
+`;
+    clickMonitorProcess = spawn('swift', ['-e', swiftCode], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    clickMonitorProcess.stdout.on('data', (data) => {
+      const lines = data.toString().trim().split('\n');
+      for (const line of lines) {
+        if (!line.startsWith('CLICK:')) continue;
+        const parts = line.substring(6).split(',');
+        if (parts.length < 3) continue;
+        const x = parseFloat(parts[0]);
+        const y = parseFloat(parts[1]);
+        const button = parts[2];
+        clickData.push({
+          t: Date.now() - recordingStartTime,
+          x: (x - bounds.x) / bounds.width,
+          y: (y - bounds.y) / bounds.height,
+          button,
+        });
+      }
+    });
+
+    clickMonitorProcess.stderr.on('data', (data) => {
+      console.warn('Click monitor:', data.toString().trim());
+    });
+
+    clickMonitorProcess.on('error', (err) => {
+      console.warn('Click monitor failed to start:', err.message);
+      clickMonitorProcess = null;
+    });
+
+    clickMonitorProcess.on('exit', () => {
+      clickMonitorProcess = null;
+    });
+  } catch (e) {
+    console.warn('Click monitor error:', e.message);
+  }
+}
+
+function stopClickMonitor() {
+  if (clickMonitorProcess) {
+    clickMonitorProcess.kill('SIGTERM');
+    clickMonitorProcess = null;
+  }
 }
 
 function stopCursorTracking() {
@@ -76,7 +170,8 @@ function stopCursorTracking() {
     clearInterval(cursorTracker);
     cursorTracker = null;
   }
-  return cursorData;
+  stopClickMonitor();
+  return { positions: cursorData, clicks: clickData };
 }
 
 function createPreviewWindow(data) {
@@ -120,11 +215,9 @@ function createPreviewWindow(data) {
 }
 
 app.whenReady().then(() => {
-  if (process.platform === 'darwin') {
-    const { nativeImage } = require('electron');
-    const iconPath = path.join(__dirname, 'icon.png');
-    try { app.dock.setIcon(nativeImage.createFromPath(iconPath)); } catch(e) {}
-  }
+  const { nativeImage } = require('electron');
+  const iconPath = path.join(__dirname, 'icon.png');
+  try { app.dock.setIcon(nativeImage.createFromPath(iconPath)); } catch(e) {}
   createMainWindow();
 
   ipcMain.handle('get-sources', async () => {
@@ -150,7 +243,7 @@ app.whenReady().then(() => {
   });
 
   ipcMain.on('start-cursor-tracking', (event, options) => {
-    startCursorTracking();
+    startCursorTracking(options);
     if (options && options.hideCursor) {
       showCursorHider();
     }
@@ -158,12 +251,12 @@ app.whenReady().then(() => {
 
   ipcMain.on('stop-cursor-tracking', (event) => {
     try {
-      const positions = stopCursorTracking();
+      const data = stopCursorTracking();
       hideCursorHider();
-      event.reply('cursor-data', positions);
+      event.reply('cursor-data', data);
     } catch (e) {
       console.error('stop-cursor-tracking error:', e);
-      event.reply('cursor-data', []);
+      event.reply('cursor-data', { positions: [], clicks: [] });
     }
   });
 
@@ -202,6 +295,7 @@ app.whenReady().then(() => {
       mp4: [{ name: 'MP4 Video', extensions: ['mp4'] }],
       mov: [{ name: 'MOV Video', extensions: ['mov'] }],
       webm: [{ name: 'WebM Video', extensions: ['webm'] }],
+      json: [{ name: 'Project File', extensions: ['json'] }],
     };
     const filters = filterMap[ext] || filterMap.webm;
     const result = await dialog.showSaveDialog(previewWindow || mainWindow, {
@@ -243,9 +337,6 @@ app.whenReady().then(() => {
       '/opt/homebrew/bin/ffmpeg',
       '/usr/bin/ffmpeg',
       path.join(process.resourcesPath || '', 'ffmpeg'),
-      // Windows paths
-      'C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe',
-      path.join(process.resourcesPath || '', 'ffmpeg.exe'),
     ];
     for (const p of candidates) {
       try { execSync(`"${p}" -version`, { stdio: 'ignore' }); return p; } catch(e) {}
@@ -310,20 +401,93 @@ app.whenReady().then(() => {
     createPreviewWindow(data);
   });
 
-  ipcMain.on('open-screen-settings', () => {
-    if (process.platform === 'darwin') {
-      shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
-    } else if (process.platform === 'win32') {
-      shell.openExternal('ms-settings:privacy-broadfilesystemaccess');
+  // ═══════ Mouse Position Query ═══════
+  ipcMain.handle('get-mouse-position', () => {
+    const point = screen.getCursorScreenPoint();
+    const display = screen.getPrimaryDisplay();
+    const bounds = display.bounds;
+    return {
+      x: (point.x - bounds.x) / bounds.width,
+      y: (point.y - bounds.y) / bounds.height,
+      px: point.x,
+      py: point.y,
+    };
+  });
+
+  // ═══════ Script Auto-Mouse Control ═══════
+  let autoMouseProcess = null;
+
+  ipcMain.on('auto-mouse-move', (event, { x, y }) => {
+    // Move system cursor to normalized position on primary display
+    const display = screen.getPrimaryDisplay();
+    const bounds = display.bounds;
+    const px = Math.round(bounds.x + x * bounds.width);
+    const py = Math.round(bounds.y + y * bounds.height);
+    try {
+      // Use cliclick for reliable cursor movement on macOS
+      execSync(`cliclick m:${px},${py}`, { stdio: 'ignore', timeout: 500 });
+    } catch(e) {
+      // Fallback: use AppleScript
+      try {
+        const { execSync: es } = require('child_process');
+        es(`osascript -e 'tell application "System Events" to set position of mouse to {${px}, ${py}}'`, { stdio: 'ignore', timeout: 500 });
+      } catch(e2) {}
     }
   });
 
-  ipcMain.on('open-camera-settings', () => {
-    if (process.platform === 'darwin') {
-      shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Camera');
-    } else if (process.platform === 'win32') {
-      shell.openExternal('ms-settings:privacy-webcam');
+  ipcMain.on('auto-mouse-click', (event, { x, y, button }) => {
+    const display = screen.getPrimaryDisplay();
+    const bounds = display.bounds;
+    const px = Math.round(bounds.x + x * bounds.width);
+    const py = Math.round(bounds.y + y * bounds.height);
+    const clickType = button === 'right' ? 'rc' : 'c';
+    try {
+      execSync(`cliclick ${clickType}:${px},${py}`, { stdio: 'ignore', timeout: 500 });
+    } catch(e) {
+      // Fallback: CGEvent via Swift
+      try {
+        const swiftClick = `
+import Cocoa
+let pos = CGPoint(x: ${px}, y: ${py})
+let moveDown = CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown, mouseCursorPosition: pos, mouseButton: .left)
+let moveUp = CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp, mouseCursorPosition: pos, mouseButton: .left)
+moveDown?.post(tap: .cghidEventTap)
+usleep(50000)
+moveUp?.post(tap: .cghidEventTap)
+`;
+        execSync(`swift -e '${swiftClick.replace(/'/g, "'\\''")}'`, { stdio: 'ignore', timeout: 2000 });
+      } catch(e2) {
+        console.warn('Auto-click failed:', e2.message);
+      }
     }
+  });
+
+  ipcMain.on('auto-mouse-scroll', (event, { x, y, delta }) => {
+    const display = screen.getPrimaryDisplay();
+    const bounds = display.bounds;
+    const px = Math.round(bounds.x + x * bounds.width);
+    const py = Math.round(bounds.y + y * bounds.height);
+    const scrollAmt = delta || 3;
+    try {
+      // Move to position then scroll
+      execSync(`cliclick m:${px},${py}`, { stdio: 'ignore', timeout: 500 });
+      const swiftScroll = `
+import Cocoa
+let event = CGEvent(scrollWheelEvent2Source: nil, units: .line, wheelCount: 1, wheel1: Int32(${-scrollAmt}), wheel2: 0, wheel3: 0)
+event?.post(tap: .cghidEventTap)
+`;
+      execSync(`swift -e '${swiftScroll.replace(/'/g, "'\\''")}'`, { stdio: 'ignore', timeout: 2000 });
+    } catch(e) {
+      console.warn('Auto-scroll failed:', e.message);
+    }
+  });
+
+  ipcMain.on('open-screen-settings', () => {
+    shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+  });
+
+  ipcMain.on('open-camera-settings', () => {
+    shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Camera');
   });
 
   globalShortcut.register('CommandOrControl+Shift+R', () => {
@@ -336,16 +500,17 @@ app.whenReady().then(() => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
-  hideCursorHider(); // Always restore cursor on quit
+  hideCursorHider();
+  stopClickMonitor();
 });
 
-// Safety: restore cursor if app crashes
-process.on('exit', hideCursorHider);
-process.on('SIGINT', () => { hideCursorHider(); process.exit(); });
-process.on('uncaughtException', (err) => { hideCursorHider(); console.error(err); process.exit(1); });
+// Safety: restore cursor and cleanup on exit
+process.on('exit', () => { hideCursorHider(); stopClickMonitor(); });
+process.on('SIGINT', () => { hideCursorHider(); stopClickMonitor(); process.exit(); });
+process.on('uncaughtException', (err) => { hideCursorHider(); stopClickMonitor(); console.error(err); process.exit(1); });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  // macOS: keep app running when all windows are closed
 });
 
 app.on('activate', () => {

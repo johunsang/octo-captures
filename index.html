@@ -156,6 +156,41 @@
       background: #16213e; padding: 2px 6px; border-radius: 4px;
       font-family: inherit; font-size: 10px;
     }
+    /* Auto-mouse section */
+    .mouse-path-section { margin-top: 8px; }
+    .wp-list {
+      max-height: 140px; overflow-y: auto; margin: 6px 0;
+      font-size: 11px;
+    }
+    .wp-list::-webkit-scrollbar { width: 3px; }
+    .wp-list::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+    .wp-item {
+      display: flex; align-items: center; gap: 6px;
+      padding: 4px 6px; border-radius: 6px; background: #0f0f23;
+      margin-bottom: 3px; cursor: default;
+    }
+    .wp-item:hover { background: #1a1a3e; }
+    .wp-item .wp-idx { color: #667eea; font-weight: 600; min-width: 18px; }
+    .wp-item .wp-info { flex: 1; color: #aaa; }
+    .wp-item .wp-del {
+      background: none; border: none; color: #e74c3c; cursor: pointer;
+      font-size: 13px; padding: 0 2px; opacity: 0.6;
+    }
+    .wp-item .wp-del:hover { opacity: 1; }
+    .mouse-btn-row { display: flex; gap: 6px; }
+    .mouse-btn {
+      flex: 1; padding: 6px; border: none; border-radius: 6px;
+      font-size: 11px; font-weight: 500; cursor: pointer;
+      background: #16213e; color: #aaa; transition: all 0.15s;
+    }
+    .mouse-btn:hover { color: #e0e0e0; background: #1a2744; }
+    .mouse-btn.primary { background: linear-gradient(135deg, #667eea, #764ba2); color: white; }
+    .mouse-btn.primary:hover { opacity: 0.9; }
+    .delay-input {
+      background: #0f0f23; color: #e0e0e0; border: 1px solid #333;
+      border-radius: 4px; padding: 2px 6px; font-size: 11px; width: 50px;
+      outline: none; text-align: center;
+    }
   </style>
 </head>
 <body>
@@ -190,12 +225,37 @@
         <input type="checkbox" class="toggle" id="cursorToggle" checked>
       </div>
       <div class="option-row">
+        <label class="option-label"><span class="option-icon">🤖</span> 마우스 자동</label>
+        <input type="checkbox" class="toggle" id="autoMouseToggle">
+      </div>
+      <div class="option-row">
         <label class="option-label"><span class="option-icon">🎬</span> 화질</label>
         <select class="quality-select" id="qualitySelect">
           <option value="4000000">보통 (4Mbps)</option>
           <option value="8000000" selected>높음 (8Mbps)</option>
           <option value="16000000">최고 (16Mbps)</option>
         </select>
+      </div>
+    </div>
+
+    <div class="options mouse-path-section" id="autoMouseSection" style="display:none;">
+      <div class="options-title">🖱️ 마우스 자동 움직임</div>
+      <div style="font-size:10px;color:#666;margin-bottom:6px;line-height:1.4;">
+        마우스 위치를 원하는 곳에 놓고 [+ 현재 위치]를 눌러 경로를 추가하세요.<br>
+        녹화 시작 후 설정된 경로대로 마우스가 자동으로 움직입니다.
+      </div>
+      <div class="wp-list" id="mouseWpList"></div>
+      <div class="mouse-btn-row" style="margin-bottom:6px;">
+        <button class="mouse-btn primary" onclick="addMouseWaypoint()">+ 현재 위치</button>
+        <button class="mouse-btn" onclick="addMouseWaypoint('click')">+ 클릭</button>
+        <button class="mouse-btn" onclick="addMouseWaypoint('dblclick')">+ 더블클릭</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        <span style="font-size:11px;color:#888;">포인트 간격</span>
+        <input type="number" class="delay-input" id="wpDelay" value="0.5" min="0.1" max="10" step="0.1">
+        <span style="font-size:11px;color:#666;">초</span>
+        <span style="flex:1"></span>
+        <button class="mouse-btn" style="flex:0;padding:4px 10px;color:#e74c3c;" onclick="clearMouseWaypoints()">전체 삭제</button>
       </div>
     </div>
 
@@ -218,6 +278,8 @@
     let webcamRecorder = null;
     let webcamChunks = [];
     let webcamStream = null;
+    let mouseWaypoints = [];
+    let autoMouseTimers = [];
 
     const sourceList = document.getElementById('sourceList');
     const recordBtn = document.getElementById('recordBtn');
@@ -231,6 +293,98 @@
     const webcamToggle = document.getElementById('webcamToggle');
     const webcamSelect = document.getElementById('webcamSelect');
     const webcamSelectRow = document.getElementById('webcamSelectRow');
+    const autoMouseToggle = document.getElementById('autoMouseToggle');
+    const autoMouseSection = document.getElementById('autoMouseSection');
+
+    // Auto-mouse toggle
+    autoMouseToggle.addEventListener('change', () => {
+      autoMouseSection.style.display = autoMouseToggle.checked ? 'block' : 'none';
+    });
+
+    async function addMouseWaypoint(action = 'move') {
+      const pos = await window.electronAPI.getMousePosition();
+      const delay = parseFloat(document.getElementById('wpDelay').value) || 0.5;
+      mouseWaypoints.push({ x: pos.x, y: pos.y, px: pos.px, py: pos.py, action, delay });
+      renderMouseWaypoints();
+    }
+
+    function renderMouseWaypoints() {
+      const list = document.getElementById('mouseWpList');
+      if (!mouseWaypoints.length) {
+        list.innerHTML = '<div style="color:#555;font-size:10px;text-align:center;padding:8px;">경로 없음</div>';
+        return;
+      }
+      const actionLabel = { move: '이동', click: '클릭', dblclick: '더블클릭' };
+      list.innerHTML = mouseWaypoints.map((wp, i) => `
+        <div class="wp-item">
+          <span class="wp-idx">${i + 1}</span>
+          <span class="wp-info">${actionLabel[wp.action] || wp.action} (${wp.px}, ${wp.py})</span>
+          <input type="number" class="delay-input" value="${wp.delay}" min="0.1" max="10" step="0.1"
+            title="다음 포인트까지 대기 시간(초)"
+            onchange="mouseWaypoints[${i}].delay=parseFloat(this.value)||0.5">
+          <button class="wp-del" onclick="mouseWaypoints.splice(${i},1);renderMouseWaypoints();">✕</button>
+        </div>
+      `).join('');
+    }
+
+    function clearMouseWaypoints() {
+      mouseWaypoints = [];
+      renderMouseWaypoints();
+    }
+
+    function startAutoMouse() {
+      if (!mouseWaypoints.length) return;
+      autoMouseTimers = [];
+      let cumDelay = 0;
+      // 녹화 시작 후 0.5초 뒤부터 실행
+      cumDelay += 500;
+      mouseWaypoints.forEach((wp, i) => {
+        const t = cumDelay;
+        // 부드러운 이동: 이전 위치에서 현재 위치로 보간
+        const prevWp = i > 0 ? mouseWaypoints[i - 1] : null;
+        if (prevWp) {
+          const steps = 20;
+          const stepMs = (wp.delay * 1000) / steps;
+          for (let s = 1; s <= steps; s++) {
+            const frac = s / steps;
+            // ease-in-out
+            const ease = frac < 0.5 ? 2 * frac * frac : 1 - Math.pow(-2 * frac + 2, 2) / 2;
+            const ix = prevWp.x + (wp.x - prevWp.x) * ease;
+            const iy = prevWp.y + (wp.y - prevWp.y) * ease;
+            const moveTimer = setTimeout(() => {
+              window.electronAPI.autoMouseMove({ x: ix, y: iy });
+            }, t - wp.delay * 1000 + s * stepMs);
+            autoMouseTimers.push(moveTimer);
+          }
+        } else {
+          // 첫 포인트: 바로 이동
+          const moveTimer = setTimeout(() => {
+            window.electronAPI.autoMouseMove({ x: wp.x, y: wp.y });
+          }, t);
+          autoMouseTimers.push(moveTimer);
+        }
+        // 액션 실행
+        if (wp.action !== 'move') {
+          const actionTimer = setTimeout(() => {
+            if (wp.action === 'click') {
+              window.electronAPI.autoMouseClick({ x: wp.x, y: wp.y, button: 'left' });
+            } else if (wp.action === 'dblclick') {
+              window.electronAPI.autoMouseClick({ x: wp.x, y: wp.y, button: 'left' });
+              setTimeout(() => window.electronAPI.autoMouseClick({ x: wp.x, y: wp.y, button: 'left' }), 100);
+            }
+          }, t + 50);
+          autoMouseTimers.push(actionTimer);
+        }
+        cumDelay += wp.delay * 1000;
+      });
+    }
+
+    function stopAutoMouse() {
+      autoMouseTimers.forEach(t => clearTimeout(t));
+      autoMouseTimers = [];
+    }
+
+    renderMouseWaypoints();
 
     // Webcam toggle
     webcamToggle.addEventListener('change', async () => {
@@ -415,7 +569,7 @@
               window.electronAPI.stopCursorTracking();
               cursorPositions = await Promise.race([
                 cursorPromise,
-                new Promise(resolve => setTimeout(() => resolve([]), 3000))
+                new Promise(resolve => setTimeout(() => resolve({ positions: [], clicks: [] }), 3000))
               ]);
             }
 
@@ -481,11 +635,16 @@
 
         // Start cursor tracking (with optional cursor hiding)
         if (cursorToggle.checked) {
-          window.electronAPI.startCursorTracking();
+          window.electronAPI.startCursorTracking({ sourceId: selectedSourceId });
         }
 
         mediaRecorder.start(1000); // collect data every 1 second
         recordingSeconds = 0;
+
+        // Start auto-mouse if enabled
+        if (autoMouseToggle.checked && mouseWaypoints.length) {
+          startAutoMouse();
+        }
 
         recordBtn.disabled = false;
         recordBtn.textContent = '⏹ 녹화 중지';
@@ -506,6 +665,7 @@
 
     function stopRecording() {
       if (!isRecording) return;
+      stopAutoMouse();
       if (mediaRecorder && mediaRecorder.state !== 'inactive') {
         mediaRecorder.stop();
       }

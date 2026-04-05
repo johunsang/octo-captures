@@ -33,7 +33,10 @@
     .tools-panel {
       width: 72px; background:var(--bg2); border-right:1px solid var(--border);
       display:flex; flex-direction:column; align-items:center; padding:8px 0; gap:4px;
+      overflow-y:auto; overflow-x:hidden;
     }
+    .tools-panel::-webkit-scrollbar { width:3px; }
+    .tools-panel::-webkit-scrollbar-thumb { background:var(--surface); border-radius:2px; }
     .tool-btn {
       width:56px; padding:10px 0; border:none; background:none;
       color:var(--text3); font-size:10px; cursor:pointer;
@@ -155,7 +158,7 @@
 
     /* ── Bottom Timeline ── */
     .timeline-section {
-      height:200px; background:var(--bg2); border-top:1px solid var(--border);
+      height:240px; background:var(--bg2); border-top:1px solid var(--border);
       display:flex; flex-direction:column; flex-shrink:0;
     }
 
@@ -326,7 +329,13 @@
       font-size:9px; color:var(--text3); font-weight:600;
       overflow:hidden;
     }
-    .tl-segment:hover { background:rgba(124,111,245,0.2); border-color:rgba(124,111,245,0.5); color:var(--text2); }
+    .tl-segment:hover { background:rgba(124,111,245,0.2); border-color:rgba(124,111,245,0.5); color:var(--text2); cursor:grab; }
+    .tl-segment.dragging { opacity:0.5; z-index:10; cursor:grabbing; }
+    .tl-snap-line { position:absolute; top:0; height:100%; width:2px; background:var(--accent2); z-index:25; pointer-events:none; box-shadow:0 0 6px var(--accent2); }
+    .tl-segment-resize { position:absolute; top:0; width:6px; height:100%; cursor:ew-resize; z-index:5; }
+    .tl-segment-resize.left { left:0; border-radius:4px 0 0 4px; }
+    .tl-segment-resize.right { right:0; border-radius:0 4px 4px 0; }
+    .tl-segment-resize:hover { background:rgba(124,111,245,0.4); }
     .tl-segment.selected { background:rgba(124,111,245,0.3); border-color:var(--accent); color:white; }
     .tl-segment.deleted {
       background:repeating-linear-gradient(45deg, rgba(240,96,96,0.12), rgba(240,96,96,0.12) 3px, transparent 3px, transparent 6px);
@@ -381,6 +390,63 @@
       align-items:center; justify-content:center; z-index:10;
     }
     .tl-add-btn:hover { border-color:var(--accent); color:var(--accent); }
+    /* Script waypoint markers */
+    .tl-wp {
+      position:absolute; top:4px; bottom:4px;
+      background:rgba(80,208,160,0.2); border:1px solid rgba(80,208,160,0.5);
+      border-radius:4px; font-size:9px; font-weight:600; color:var(--green);
+      padding:0 6px; display:flex; align-items:center;
+      cursor:pointer; min-width:20px; user-select:none; z-index:3;
+    }
+    .tl-wp:hover { background:rgba(80,208,160,0.35); }
+    .tl-wp.selected { outline:2px solid var(--green); outline-offset:-1px; }
+    .tl-wp .wp-icon { margin-right:3px; }
+
+    /* ── Filter Grid ── */
+    .filter-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+    .filter-card {
+      background:var(--bg); border:2px solid transparent; border-radius:8px;
+      padding:8px 4px; text-align:center; cursor:pointer; transition:all 0.15s;
+      font-size:10px; color:var(--text2);
+    }
+    .filter-card:hover { border-color:var(--surface); background:var(--bg3); }
+    .filter-card.on { border-color:var(--accent); background:var(--bg3); color:white; }
+    .filter-card .filter-preview {
+      width:100%; height:32px; border-radius:4px; margin-bottom:4px;
+      background:var(--surface);
+    }
+
+    /* ── Text Template Grid ── */
+    .tmpl-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:6px; }
+    .tmpl-card {
+      background:var(--bg); border:2px solid transparent; border-radius:8px;
+      padding:10px 6px; text-align:center; cursor:pointer; transition:all 0.15s;
+      font-size:10px; min-height:50px; display:flex; align-items:center; justify-content:center;
+    }
+    .tmpl-card:hover { border-color:var(--surface); }
+    .tmpl-card.on { border-color:var(--accent); }
+
+    /* ── Audio Panel ── */
+    .waveform-box {
+      height:40px; background:var(--bg); border-radius:6px; margin-top:6px;
+      position:relative; overflow:hidden;
+    }
+    .waveform-box canvas { width:100%; height:100%; display:block; }
+
+    /* ── Save/Load Buttons ── */
+    .project-btn {
+      width:100%; padding:8px; border:1px dashed var(--border); border-radius:8px;
+      background:none; color:var(--text2); font-size:11px; cursor:pointer;
+      transition:all 0.15s; margin-bottom:4px;
+    }
+    .project-btn:hover { border-color:var(--accent); color:var(--accent); background:var(--bg3); }
+
+    /* ── Intensity Badge ── */
+    .fx-badge {
+      display:inline-block; padding:1px 5px; border-radius:3px;
+      background:var(--accent); color:white; font-size:8px; font-weight:700;
+      vertical-align:middle; margin-left:4px;
+    }
 
     /* Inline text editor */
     .inline-edit {
@@ -406,12 +472,16 @@
     <!-- Left Tools -->
     <div class="tools-panel">
       <button class="tool-btn active" data-tool="zoom"><span class="tool-icon">🔍</span>Zoom</button>
-      <button class="tool-btn" data-tool="webcam"><span class="tool-icon">📷</span>Webcam</button>
-      <button class="tool-btn" data-tool="cursor"><span class="tool-icon">🖱</span>Cursor</button>
+      <button class="tool-btn" data-tool="filter"><span class="tool-icon">🎞</span>Filter</button>
+      <button class="tool-btn" data-tool="effects"><span class="tool-icon">✨</span>Effects</button>
       <button class="tool-btn" data-tool="text"><span class="tool-icon">T</span>Text</button>
       <button class="tool-btn" data-tool="annotate"><span class="tool-icon">✏️</span>Annotate</button>
       <button class="tool-btn" data-tool="crop"><span class="tool-icon">⬒</span>Crop</button>
+      <button class="tool-btn" data-tool="webcam"><span class="tool-icon">📷</span>Webcam</button>
+      <button class="tool-btn" data-tool="cursor"><span class="tool-icon">🖱</span>Cursor</button>
       <button class="tool-btn" data-tool="style"><span class="tool-icon">🎨</span>Style</button>
+      <button class="tool-btn" data-tool="audio"><span class="tool-icon">🔊</span>Audio</button>
+      <button class="tool-btn" data-tool="script"><span class="tool-icon">🎬</span>Script</button>
       <button class="tool-btn" data-tool="export"><span class="tool-icon">📤</span>Export</button>
     </div>
 
@@ -439,10 +509,10 @@
     <button class="act-btn" onclick="addSubAtPlayhead()" title="자막 추가 (T)"><span class="act-icon">💬</span>자막</button>
     <button class="act-btn" onclick="captureFrame()" title="현재 프레임 캡처 (P)"><span class="act-icon">📸</span>캡처</button>
     <div class="act-sep"></div>
-    <button class="act-btn" onclick="setSegmentSpeed(0.5)" title="구간 0.5x"><span class="act-icon">🐢</span>0.5x</button>
-    <button class="act-btn" onclick="setSegmentSpeed(1)" title="구간 1x"><span class="act-icon">▶️</span>1x</button>
-    <button class="act-btn" onclick="setSegmentSpeed(1.5)" title="구간 1.5x"><span class="act-icon">⏩</span>1.5x</button>
-    <button class="act-btn" onclick="setSegmentSpeed(2)" title="구간 2x"><span class="act-icon">🐇</span>2x</button>
+    <button class="act-btn" id="spd05" onclick="setSegmentSpeed(0.5)" title="구간 0.5x"><span class="act-icon">🐢</span>0.5x</button>
+    <button class="act-btn" id="spd1" onclick="setSegmentSpeed(1)" title="구간 1x"><span class="act-icon">▶️</span>1x</button>
+    <button class="act-btn" id="spd15" onclick="setSegmentSpeed(1.5)" title="구간 1.5x"><span class="act-icon">⏩</span>1.5x</button>
+    <button class="act-btn" id="spd2" onclick="setSegmentSpeed(2)" title="구간 2x"><span class="act-icon">🐇</span>2x</button>
     <div class="act-sep"></div>
     <button class="act-btn" onclick="undo()" title="실행취소 (⌘Z)"><span class="act-icon">↩️</span>실행취소</button>
     <button class="act-btn" onclick="redo()" title="다시실행 (⌘⇧Z)"><span class="act-icon">↪️</span>다시실행</button>
@@ -492,6 +562,20 @@
       <div class="tl-track" id="zoomTrackRow">
         <div class="tl-track-label">Zoom</div>
         <div class="tl-track-content" id="zoomTrack"></div>
+      </div>
+      <!-- Script waypoints track -->
+      <div class="tl-track" id="scriptTrackRow" style="display:none">
+        <div class="tl-track-label">Script</div>
+        <div class="tl-track-content" id="scriptTrack">
+          <button class="tl-add-btn" id="addWpBtn" title="웨이포인트 추가">+</button>
+        </div>
+      </div>
+      <!-- Audio waveform track -->
+      <div class="tl-track" id="audioTrackRow">
+        <div class="tl-track-label">Audio</div>
+        <div class="tl-track-content" id="audioTrack" style="overflow:hidden;">
+          <canvas id="audioWaveformTL" style="width:100%;height:100%;display:block;"></canvas>
+        </div>
       </div>
     </div>
     <!-- Inline subtitle editor -->
@@ -550,6 +634,20 @@ let prevFrameCtx = null;
 let splitPoints = []; // sorted time values
 let transitions = {}; // { timeKey: { type:'fade'|'slide'|'wipe', duration:0.5 } }
 
+// ═══════ Scripted Demo ═══════
+let scriptWaypoints = []; // { id, t, x, y, action, duration, text }
+let scriptMode = false;
+let selectedWaypoint = null;
+let scriptDraggingWp = null;
+let ttsAudioBuffers = {};   // waypointId → ArrayBuffer
+let ttsAudioElements = {};  // waypointId → Audio element
+let geminiApiKey = localStorage.getItem('geminiApiKey') || '';
+let ttsVoice = localStorage.getItem('ttsVoice') || 'Kore';
+let ttsGenerating = false;
+let ttsAutoPlay = true; // auto-play TTS during preview playback
+let ttsPlayedWaypoints = new Set(); // track which waypoints already played TTS in current session
+let ttsCurrentlyPlaying = null; // currently playing TTS audio element
+
 // ═══════ Undo/Redo ═══════
 let history = [];
 let historyIdx = -1;
@@ -559,6 +657,9 @@ const MAX_HISTORY = 50;
 const S = {
   autoZoom: true, zoomLevel: 1.5, zoomSmooth: 0.015, sensitivity: 0.012,
   highlight: true, highlightStrength: 0.4,
+  // Advanced zoom
+  velocityZoom: false, clickZoom: true, dwellZoom: false, predictPan: true,
+  easePreset: 'easeOut', // 'linear', 'easeIn', 'easeOut', 'easeInOut'
   padding: 0, radius: 12, shadow: true,
   brightness: 1, contrast: 1, saturate: 1,
   subFontSize: 28, subWeight: '700', subColor: '#ffffff',
@@ -576,6 +677,54 @@ const S = {
   webcamShadow: true, webcamOpacity: 1.0, webcamFlip: true,
 };
 
+// ═══════ Filter Presets ═══════
+let activeFilter = 'none';
+const filterPresets = {
+  none:      { name:'원본',      brightness:1,    contrast:1,    saturate:1,    hueRotate:0,  sepia:0,   overlay:null },
+  cinematic: { name:'시네마틱',   brightness:0.95, contrast:1.2,  saturate:0.85, hueRotate:-5, sepia:0.1, overlay:'rgba(0,20,40,0.15)' },
+  warm:      { name:'따뜻한',    brightness:1.05, contrast:1.05, saturate:1.1,  hueRotate:10, sepia:0.15,overlay:'rgba(255,140,0,0.08)' },
+  cool:      { name:'차가운',    brightness:1,    contrast:1.1,  saturate:0.9,  hueRotate:-15,sepia:0,   overlay:'rgba(0,100,200,0.1)' },
+  vintage:   { name:'빈티지',    brightness:1.1,  contrast:0.9,  saturate:0.7,  hueRotate:15, sepia:0.3, overlay:'rgba(180,140,80,0.12)' },
+  bw:        { name:'흑백',      brightness:1,    contrast:1.2,  saturate:0,    hueRotate:0,  sepia:0,   overlay:null },
+  film:      { name:'필름',      brightness:1.05, contrast:1.15, saturate:0.9,  hueRotate:5,  sepia:0.1, overlay:'rgba(200,180,150,0.08)' },
+  dramatic:  { name:'드라마틱',   brightness:0.9,  contrast:1.4,  saturate:1.1,  hueRotate:0,  sepia:0.05,overlay:'rgba(0,0,0,0.1)' },
+  vivid:     { name:'비비드',    brightness:1.05, contrast:1.15, saturate:1.5,  hueRotate:0,  sepia:0,   overlay:null },
+  fade:      { name:'페이드',    brightness:1.1,  contrast:0.85, saturate:0.8,  hueRotate:0,  sepia:0.05,overlay:'rgba(200,200,200,0.1)' },
+  tokyo:     { name:'도쿄',      brightness:1,    contrast:1.1,  saturate:1.3,  hueRotate:-10,sepia:0,   overlay:'rgba(100,0,200,0.08)' },
+  golden:    { name:'골든아워',   brightness:1.1,  contrast:1.05, saturate:1.2,  hueRotate:15, sepia:0.2, overlay:'rgba(255,200,50,0.1)' },
+};
+
+// ═══════ Effects (FX) ═══════
+const FX = {
+  vignette: 0, grain: 0, blur: 0,
+  glitch: false, scanlines: false,
+  chromatic: 0, temperature: 0, tint: 0,
+  highlights: 0, shadows: 0, fadeAmount: 0, sharpen: 0,
+  // Screen effects
+  crt: false, pixelate: 0, mirror: false,
+  shake: 0, flash: 0, letterbox: 0,
+  rgbSplit: 0, zoom_pulse: 0, invert: false,
+  noise: 0, dream: 0, emboss: false,
+};
+let grainCanvas = null, grainCtx = null, lastGrainUpdate = 0;
+
+// ═══════ Audio Settings ═══════
+const audioSettings = { volume: 1, fadeIn: 0, fadeOut: 0, muted: false };
+
+// ═══════ Text Templates ═══════
+const textTemplates = [
+  { name:'기본 자막',   fontSize:28, weight:'700', color:'#ffffff', outline:true,  outlineColor:'#000000', outlineWidth:3,  bg:true,  bgColor:'#000000', bgAlpha:0.7,  anim:'fadeIn',     sample:'Aa' },
+  { name:'시네마틱',    fontSize:42, weight:'900', color:'#ffffff', outline:false, outlineColor:'#000',    outlineWidth:0,  bg:false, bgColor:'#000',    bgAlpha:0,    anim:'fadeIn',     sample:'Aa' },
+  { name:'네온 글로우',  fontSize:36, weight:'700', color:'#00ff88', outline:true,  outlineColor:'#003322', outlineWidth:4,  bg:false, bgColor:'#000',    bgAlpha:0,    anim:'glow',       sample:'Aa' },
+  { name:'굵은 아웃라인', fontSize:32, weight:'900', color:'#ffffff', outline:true,  outlineColor:'#7c6ff5', outlineWidth:5,  bg:false, bgColor:'#000',    bgAlpha:0,    anim:'popIn',      sample:'Aa' },
+  { name:'하단 자막',   fontSize:24, weight:'600', color:'#ffffff', outline:false, outlineColor:'#000',    outlineWidth:0,  bg:true,  bgColor:'#000000', bgAlpha:0.85, anim:'slideUp',    sample:'Aa' },
+  { name:'타이틀',     fontSize:48, weight:'900', color:'#ffffff', outline:true,  outlineColor:'#000000', outlineWidth:4,  bg:false, bgColor:'#000',    bgAlpha:0,    anim:'scaleUp',    sample:'Aa' },
+  { name:'코믹',      fontSize:36, weight:'900', color:'#ffff00', outline:true,  outlineColor:'#ff0000', outlineWidth:5,  bg:false, bgColor:'#000',    bgAlpha:0,    anim:'bounce',     sample:'Aa' },
+  { name:'그라디언트',  fontSize:34, weight:'700', color:'#ffffff', outline:false, outlineColor:'#000',    outlineWidth:0,  bg:true,  bgColor:'#667eea', bgAlpha:0.85, anim:'popIn',      sample:'Aa' },
+  { name:'미니멀',     fontSize:20, weight:'500', color:'#cccccc', outline:false, outlineColor:'#000',    outlineWidth:0,  bg:false, bgColor:'#000',    bgAlpha:0,    anim:'fadeIn',     sample:'Aa' },
+  { name:'컬러 웨이브',  fontSize:32, weight:'700', color:'#ff6b6b', outline:true,  outlineColor:'#000000', outlineWidth:3,  bg:false, bgColor:'#000',    bgAlpha:0,    anim:'colorWave',  sample:'Aa' },
+];
+
 // ═══════ Aspect Ratio ═══════
 let aspectRatioOverride = null; // null = auto (video native), or '16:9', '1:1', '9:16', '4:3'
 
@@ -589,7 +738,10 @@ const bgColors = {
 let hasWebcam = false;
 window.electronAPI.onLoadVideo((data) => {
   video.src = `file://${data.filePath}`;
-  cursorPositions = data.cursorPositions || [];
+  // Support both old format (array) and new format ({positions, clicks})
+  const cp = data.cursorPositions;
+  if (cp && cp.positions) { cursorPositions = cp.positions; cursorClicks = cp.clicks || []; }
+  else { cursorPositions = cp || []; cursorClicks = data.cursorClicks || []; }
   knownDuration = data.duration || 0;
   video.load();
   if (data.webcamPath) {
@@ -605,7 +757,82 @@ video.addEventListener('loadeddata', () => {
   renderSegments();
   renderRuler();
   showToolProps(currentTool);
+  extractWaveform();
+  if (!clicksEstimated) estimateClicksFromCursorData();
 });
+
+// ═══════ Audio Waveform ═══════
+let waveformData = null;
+
+async function extractWaveform() {
+  try {
+    const response = await fetch(video.src);
+    const arrayBuffer = await response.arrayBuffer();
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    const channel = audioBuffer.getChannelData(0);
+    const buckets = 2000;
+    const samplesPerBucket = Math.floor(channel.length / buckets);
+    waveformData = new Float32Array(buckets);
+    for (let i = 0; i < buckets; i++) {
+      let max = 0;
+      const start = i * samplesPerBucket;
+      for (let j = start; j < start + samplesPerBucket && j < channel.length; j++) {
+        max = Math.max(max, Math.abs(channel[j]));
+      }
+      waveformData[i] = max;
+    }
+    audioCtx.close();
+    renderTimelineWaveform();
+    // Re-render on resize
+    const audioTrack = $('audioTrack');
+    if (audioTrack) new ResizeObserver(() => renderTimelineWaveform()).observe(audioTrack);
+  } catch (e) {
+    console.warn('Waveform extraction failed:', e);
+  }
+}
+
+function renderTimelineWaveform() {
+  if (!waveformData) return;
+  const cvs = $('audioWaveformTL');
+  if (!cvs) return;
+  const parent = cvs.parentElement;
+  const rect = parent.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  cvs.width = rect.width * dpr;
+  cvs.height = rect.height * dpr;
+  const c = cvs.getContext('2d');
+  c.scale(dpr, dpr);
+  const w = rect.width, h = rect.height;
+  const dur = getDur();
+  c.clearRect(0, 0, w, h);
+
+  // Draw waveform bars
+  const barW = Math.max(1, w / waveformData.length);
+  for (let px = 0; px < w; px += barW) {
+    const t = (px / w) * dur;
+    const idx = Math.floor((t / dur) * waveformData.length);
+    const amp = waveformData[Math.min(idx, waveformData.length - 1)] || 0;
+    const barH = amp * h * 0.85;
+    // Gradient color based on amplitude
+    const intensity = Math.min(1, amp * 2);
+    c.fillStyle = `rgba(${100 + intensity * 60}, ${111 + intensity * 50}, ${200 + intensity * 55}, ${0.3 + intensity * 0.4})`;
+    c.fillRect(px, (h - barH) / 2, Math.max(1, barW - 0.5), barH);
+  }
+
+  // Dim cut regions
+  c.fillStyle = 'rgba(15, 15, 35, 0.7)';
+  for (const ct of cuts) {
+    const x1 = (ct.start / dur) * w;
+    const x2 = (ct.end / dur) * w;
+    c.fillRect(x1, 0, x2 - x1, h);
+  }
+
+  // Dim trimmed regions
+  c.fillStyle = 'rgba(0, 0, 0, 0.5)';
+  if (trimStart > 0) c.fillRect(0, 0, (trimStart / dur) * w, h);
+  if (trimEnd < dur) c.fillRect((trimEnd / dur) * w, 0, w - (trimEnd / dur) * w, h);
+}
 video.addEventListener('durationchange', () => {
   if (isFinite(video.duration) && video.duration > 0) {
     trimEnd = video.duration;
@@ -613,6 +840,7 @@ video.addEventListener('durationchange', () => {
   }
 });
 video.addEventListener('error', () => console.error('Video error:', video.error));
+video.addEventListener('seeked', () => { zoomTransition.active = false; });
 
 function getDur() {
   if (isFinite(video.duration) && video.duration > 0) return video.duration;
@@ -643,9 +871,137 @@ function setAspectRatio(r) {
 }
 window.addEventListener('resize', resizeCanvas);
 
+// ═══════ Crop Drag on Canvas ═══════
+let cropDragging = false;
+
+function getCropCanvasInfo() {
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio;
+  const W = canvas.width / dpr, H = canvas.height / dpr;
+  const vw2 = video.videoWidth, vh2 = video.videoHeight;
+  if (!vw2 || !vh2) return null;
+  const pad = S.padding, va = vw2 / vh2;
+  const iW = W - pad * 2, iH = H - pad * 2;
+  let rW, rH, oX, oY;
+  if (va > iW / iH) { rW = iW; rH = rW / va; } else { rH = iH; rW = rH * va; }
+  oX = pad + (iW - rW) / 2; oY = pad + (iH - rH) / 2;
+  return { rect, dpr, W, H, rW, rH, oX, oY };
+}
+
+function canvasToNorm(clientX, clientY, info) {
+  const mx = (clientX - info.rect.left) * (info.W / info.rect.width);
+  const my = (clientY - info.rect.top) * (info.H / info.rect.height);
+  return {
+    x: Math.max(0, Math.min(1, (mx - info.oX) / info.rW)),
+    y: Math.max(0, Math.min(1, (my - info.oY) / info.rH))
+  };
+}
+
+// Detect which handle or region the mouse is near
+function getCropHitZone(nx, ny) {
+  const L = cropRect.left / 100, R = 1 - cropRect.right / 100;
+  const T = cropRect.top / 100, B = 1 - cropRect.bottom / 100;
+  const tol = 0.03; // tolerance in normalized coords
+  const nearL = Math.abs(nx - L) < tol, nearR = Math.abs(nx - R) < tol;
+  const nearT = Math.abs(ny - T) < tol, nearB = Math.abs(ny - B) < tol;
+  const inX = nx > L + tol && nx < R - tol, inY = ny > T + tol && ny < B - tol;
+
+  // Corners
+  if (nearL && nearT) return 'tl';
+  if (nearR && nearT) return 'tr';
+  if (nearL && nearB) return 'bl';
+  if (nearR && nearB) return 'br';
+  // Edges
+  if (nearL && inY) return 'l';
+  if (nearR && inY) return 'r';
+  if (nearT && inX) return 't';
+  if (nearB && inX) return 'b';
+  // Inside = move
+  if (nx >= L && nx <= R && ny >= T && ny <= B) return 'move';
+  // Outside = new selection
+  return 'new';
+}
+
+const cropCursors = {
+  tl:'nwse-resize', tr:'nesw-resize', bl:'nesw-resize', br:'nwse-resize',
+  l:'ew-resize', r:'ew-resize', t:'ns-resize', b:'ns-resize',
+  move:'move', new:'crosshair'
+};
+
+// Update cursor on hover when crop tool active
+canvas.addEventListener('mousemove', (e) => {
+  if (currentTool !== 'crop' || cropDragging) return;
+  const info = getCropCanvasInfo();
+  if (!info) return;
+  const hasCropArea = cropEnabled && (cropRect.top > 0 || cropRect.bottom > 0 || cropRect.left > 0 || cropRect.right > 0);
+  if (!hasCropArea) { canvas.style.cursor = 'crosshair'; return; }
+  const n = canvasToNorm(e.clientX, e.clientY, info);
+  const zone = getCropHitZone(n.x, n.y);
+  canvas.style.cursor = cropCursors[zone] || 'crosshair';
+});
+
+canvas.addEventListener('mousedown', (e) => {
+  if (currentTool !== 'crop') return;
+  const info = getCropCanvasInfo();
+  if (!info) return;
+  cropDragging = true;
+  cropEnabled = true;
+  e.preventDefault();
+  e.stopPropagation();
+
+  const n0 = canvasToNorm(e.clientX, e.clientY, info);
+  const hasCropArea = (cropRect.top > 0 || cropRect.bottom > 0 || cropRect.left > 0 || cropRect.right > 0);
+  const zone = hasCropArea ? getCropHitZone(n0.x, n0.y) : 'new';
+
+  // Snapshot of crop rect before drag
+  const origL = cropRect.left, origR = cropRect.right;
+  const origT = cropRect.top, origB = cropRect.bottom;
+
+  const onMove = (ev) => {
+    const n = canvasToNorm(ev.clientX, ev.clientY, info);
+
+    if (zone === 'new') {
+      const x1 = Math.min(n0.x, n.x), x2 = Math.max(n0.x, n.x);
+      const y1 = Math.min(n0.y, n.y), y2 = Math.max(n0.y, n.y);
+      cropRect.left = Math.round(x1 * 100);
+      cropRect.right = Math.round((1 - x2) * 100);
+      cropRect.top = Math.round(y1 * 100);
+      cropRect.bottom = Math.round((1 - y2) * 100);
+    } else if (zone === 'move') {
+      const dx = (n.x - n0.x) * 100, dy = (n.y - n0.y) * 100;
+      let newL = origL + dx, newR = origR - dx;
+      let newT = origT + dy, newB = origB - dy;
+      // Clamp so crop stays within 0-100
+      if (newL < 0) { newR += newL; newL = 0; }
+      if (newR < 0) { newL += newR; newR = 0; }
+      if (newT < 0) { newB += newT; newT = 0; }
+      if (newB < 0) { newT += newB; newB = 0; }
+      cropRect.left = Math.round(Math.max(0, newL));
+      cropRect.right = Math.round(Math.max(0, newR));
+      cropRect.top = Math.round(Math.max(0, newT));
+      cropRect.bottom = Math.round(Math.max(0, newB));
+    } else {
+      // Edge/corner resize
+      if (zone.includes('l')) cropRect.left = Math.round(Math.max(0, Math.min(100 - origR - 5, n.x * 100)));
+      if (zone.includes('r')) cropRect.right = Math.round(Math.max(0, Math.min(100 - origL - 5, (1 - n.x) * 100)));
+      if (zone.includes('t')) cropRect.top = Math.round(Math.max(0, Math.min(100 - origB - 5, n.y * 100)));
+      if (zone.includes('b')) cropRect.bottom = Math.round(Math.max(0, Math.min(100 - origT - 5, (1 - n.y) * 100)));
+    }
+  };
+  const onUp = () => {
+    cropDragging = false;
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    showToolProps('crop');
+  };
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+});
+
 // ═══════ Webcam Drag ═══════
 let webcamDragging = false;
 canvas.addEventListener('mousedown', (e) => {
+  if (cropDragging || currentTool === 'crop') return;
   if (!hasWebcam || !S.webcamVisible) return;
   const rect = canvas.getBoundingClientRect();
   const dpr = window.devicePixelRatio;
@@ -682,6 +1038,8 @@ document.querySelectorAll('.tool-btn').forEach(btn => {
     btn.classList.add('active');
     currentTool = btn.dataset.tool;
     selectedSub = null;
+    canvas.style.cursor = (currentTool === 'crop' || currentTool === 'annotate' || currentTool === 'script') ? 'crosshair' : 'default';
+    updateScriptTrackVisibility();
     showToolProps(currentTool);
   });
 });
@@ -689,16 +1047,18 @@ document.querySelectorAll('.tool-btn').forEach(btn => {
 // ═══════ Properties Panel ═══════
 function showToolProps(tool) {
   const p = $('propsPanel');
-  if (tool === 'zoom') p.innerHTML = zoomPropsHTML();
-  else if (tool === 'webcam') p.innerHTML = webcamPropsHTML();
-  else if (tool === 'cursor') p.innerHTML = cursorPropsHTML();
-  else if (tool === 'text') p.innerHTML = textPropsHTML();
-  else if (tool === 'annotate') p.innerHTML = annotatePropsHTML();
-  else if (tool === 'crop') p.innerHTML = cropPropsHTML();
-  else if (tool === 'style') p.innerHTML = stylePropsHTML();
-  else if (tool === 'export') p.innerHTML = exportPropsHTML();
-  else if (tool === 'sub-edit') p.innerHTML = subEditPropsHTML();
+  const map = {
+    zoom: zoomPropsHTML, webcam: webcamPropsHTML, cursor: cursorPropsHTML,
+    text: textPropsHTML, annotate: annotatePropsHTML, crop: cropPropsHTML,
+    style: stylePropsHTML, export: exportPropsHTML, 'sub-edit': subEditPropsHTML,
+    filter: filterPropsHTML, effects: effectsPropsHTML, audio: audioPropsHTML,
+    script: scriptPropsHTML, 'script-edit': scriptWpEditPropsHTML,
+  };
+  const fn = map[tool];
+  p.innerHTML = fn ? fn() : '';
   bindProps();
+  // Re-bind audio if audio panel
+  if (tool === 'audio') bindAudioControls();
 }
 
 function zoomPropsHTML() {
@@ -718,6 +1078,22 @@ function zoomPropsHTML() {
       <p style="font-size:10px;color:var(--text3);margin-bottom:8px;">줌 시 커서 주변을 밝게, 나머지를 어둡게 합니다.</p>
       <div class="prop-row"><span class="prop-label">활성화</span><input type="checkbox" class="tog" data-s="highlight" ${S.highlight?'checked':''}></div>
       <div class="prop-row"><span class="prop-label">강도</span><div class="prop-right"><input type="range" class="sl" data-s="highlightStrength" min="0.1" max="0.7" step="0.05" value="${S.highlightStrength}"><span class="prop-val">${S.highlightStrength}</span></div></div>
+    </div>
+    <div class="prop-group">
+      <div class="prop-title">고급 줌</div>
+      <p style="font-size:10px;color:var(--text3);margin-bottom:8px;">줌 전환 품질을 세밀하게 제어합니다.</p>
+      <div class="prop-row"><span class="prop-label">이징 커브</span>
+        <div style="display:flex;gap:3px;">
+          ${['linear','easeIn','easeOut','easeInOut'].map(p => `
+            <button class="btn ${S.easePreset===p?'btn-a':'btn-g'}" onclick="S.easePreset='${p}';showToolProps('zoom')" style="padding:2px 5px;font-size:9px;">${
+              p==='linear'?'선형':p==='easeIn'?'가속':p==='easeOut'?'감속':'가감속'
+            }</button>`).join('')}
+        </div>
+      </div>
+      <div class="prop-row"><span class="prop-label">속도 기반 줌</span><input type="checkbox" class="tog" data-s="velocityZoom" ${S.velocityZoom?'checked':''}></div>
+      <div class="prop-row"><span class="prop-label">영역 감지 줌</span><input type="checkbox" class="tog" data-s="dwellZoom" ${S.dwellZoom?'checked':''}></div>
+      <div class="prop-row"><span class="prop-label">이동 예측</span><input type="checkbox" class="tog" data-s="predictPan" ${S.predictPan?'checked':''}></div>
+      <div class="prop-row"><span class="prop-label">클릭 줌</span><input type="checkbox" class="tog" data-s="clickZoom" ${S.clickZoom?'checked':''}></div>
     </div>
     <div class="prop-group">
       <div class="prop-title">모션 블러</div>
@@ -794,9 +1170,29 @@ function cursorPropsHTML() {
     </div>`;
 }
 
+function applyTextTemplate(idx) {
+  const t = textTemplates[idx];
+  S.subFontSize = t.fontSize; S.subWeight = t.weight; S.subColor = t.color;
+  S.subOutline = t.outline; S.subOutlineColor = t.outlineColor; S.subOutlineWidth = t.outlineWidth;
+  S.subBg = t.bg; S.subBgColor = t.bgColor; S.subBgAlpha = t.bgAlpha; S.subAnim = t.anim;
+  showToolProps('text'); saveState();
+}
+
 function textPropsHTML() {
   return `
     <div class="props-header">자막 스타일</div>
+    <div class="prop-group">
+      <div class="prop-title">텍스트 템플릿</div>
+      <div class="tmpl-grid">
+        ${textTemplates.map((t,i) => {
+          const style = `font-size:${Math.min(16,t.fontSize*0.4)}px;font-weight:${t.weight};color:${t.color};${t.outline?'text-shadow:-1px -1px 0 '+t.outlineColor+',1px -1px 0 '+t.outlineColor+',-1px 1px 0 '+t.outlineColor+',1px 1px 0 '+t.outlineColor:''}`;
+          const bgStyle = t.bg ? `background:${t.bgColor};opacity:${t.bgAlpha};border-radius:4px;padding:2px 6px;` : '';
+          return `<div class="tmpl-card" onclick="applyTextTemplate(${i})" title="${t.name}">
+            <span style="${style};${bgStyle}">${t.name}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
     <div class="prop-group">
       <div class="prop-row"><span class="prop-label">글꼴 크기</span><div class="prop-right"><input type="range" class="sl" data-s="subFontSize" min="14" max="56" step="1" value="${S.subFontSize}"><span class="prop-val">${S.subFontSize}</span></div></div>
       <div class="prop-row"><span class="prop-label">굵기</span>
@@ -923,7 +1319,7 @@ function cropPropsHTML() {
     <div class="props-header">크롭</div>
     <div class="prop-group">
       <p style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.5;">
-        비디오 영역을 잘라냅니다. 프리뷰와 내보내기에 모두 적용됩니다.
+        프리뷰에서 <strong>드래그</strong>하여 영역을 선택하거나,<br>아래 슬라이더로 조절합니다.
       </p>
       <div class="prop-row"><span class="prop-label">활성화</span><input type="checkbox" class="tog" id="cropToggle" ${cropEnabled?'checked':''} onchange="cropEnabled=this.checked;"></div>
     </div>
@@ -1049,7 +1445,641 @@ function exportPropsHTML() {
       </div>
       <button class="export-btn" id="autoCaptureBtn" onclick="startAutoCapture()" style="background:linear-gradient(135deg, var(--accent), var(--accent2));">자동 캡처 시작</button>
       <div class="export-status" id="autoCaptureStatus"></div>
+    </div>
+    <div class="prop-group">
+      <div class="prop-title">프로젝트</div>
+      <button class="project-btn" onclick="saveProject()">💾 프로젝트 저장 (.json)</button>
+      <button class="project-btn" onclick="document.getElementById('projectFileInput').click()">📂 프로젝트 불러오기</button>
+      <input type="file" id="projectFileInput" accept=".json" style="display:none" onchange="if(this.files[0]){const r=new FileReader();r.onload=e=>loadProjectFromJSON(e.target.result);r.readAsText(this.files[0]);}">
     </div>`;
+}
+
+function filterPropsHTML() {
+  const filterColors = {
+    none:'#444', cinematic:'#1a3a5c', warm:'#8b4513', cool:'#2a5a8a', vintage:'#8b7355',
+    bw:'#555', film:'#6b5b4b', dramatic:'#2a1a1a', vivid:'#3a6b3a', fade:'#7a7a7a',
+    tokyo:'#5a2a7a', golden:'#7a6a2a'
+  };
+  return `
+    <div class="props-header">필터 프리셋</div>
+    <div class="prop-group">
+      <p style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.5;">
+        원클릭으로 전문적인 색감을 적용합니다.<br>수동 색보정과 함께 사용할 수 있습니다.
+      </p>
+      <div class="filter-grid">
+        ${Object.entries(filterPresets).map(([k,v]) => `
+          <div class="filter-card ${activeFilter===k?'on':''}" onclick="activeFilter='${k}';showToolProps('filter');saveState();">
+            <div class="filter-preview" style="background:${filterColors[k]||'#444'};${k!=='none'?`filter:brightness(${v.brightness}) contrast(${v.contrast}) saturate(${v.saturate}) ${v.sepia?'sepia('+v.sepia+')':''}`:''};"></div>
+            ${v.name}
+          </div>`).join('')}
+      </div>
+    </div>
+    <div class="prop-group">
+      <div class="prop-title">필터 강도</div>
+      <div class="prop-row"><span class="prop-label">강도</span><div class="prop-right"><input type="range" class="sl" id="filterIntensity" min="0" max="100" step="5" value="100"><span class="prop-val">100%</span></div></div>
+    </div>`;
+}
+
+function effectsPropsHTML() {
+  const fxCount = Object.values(FX).filter(v => (typeof v === 'boolean' ? v : v !== 0)).length;
+  return `
+    <div class="props-header">효과 ${fxCount>0?'<span class="fx-badge">'+fxCount+' ON</span>':''}</div>
+    <div class="prop-group">
+      <div class="prop-title">색온도 / 틴트</div>
+      <div class="prop-row"><span class="prop-label">온도</span><div class="prop-right"><input type="range" class="sl" id="fxTemp" min="-100" max="100" step="5" value="${FX.temperature}" oninput="FX.temperature=+this.value;this.nextElementSibling.textContent=this.value"><span class="prop-val">${FX.temperature}</span></div></div>
+      <div class="prop-row"><span class="prop-label">틴트</span><div class="prop-right"><input type="range" class="sl" id="fxTint" min="-100" max="100" step="5" value="${FX.tint}" oninput="FX.tint=+this.value;this.nextElementSibling.textContent=this.value"><span class="prop-val">${FX.tint}</span></div></div>
+    </div>
+    <div class="prop-group">
+      <div class="prop-title">톤 커브</div>
+      <div class="prop-row"><span class="prop-label">하이라이트</span><div class="prop-right"><input type="range" class="sl" id="fxHighlights" min="-100" max="100" step="5" value="${FX.highlights}" oninput="FX.highlights=+this.value;this.nextElementSibling.textContent=this.value"><span class="prop-val">${FX.highlights}</span></div></div>
+      <div class="prop-row"><span class="prop-label">쉐도우</span><div class="prop-right"><input type="range" class="sl" id="fxShadows" min="-100" max="100" step="5" value="${FX.shadows}" oninput="FX.shadows=+this.value;this.nextElementSibling.textContent=this.value"><span class="prop-val">${FX.shadows}</span></div></div>
+      <div class="prop-row"><span class="prop-label">페이드</span><div class="prop-right"><input type="range" class="sl" id="fxFade" min="0" max="100" step="5" value="${FX.fadeAmount}" oninput="FX.fadeAmount=+this.value;this.nextElementSibling.textContent=this.value"><span class="prop-val">${FX.fadeAmount}</span></div></div>
+    </div>
+    <div class="prop-group">
+      <div class="prop-title">렌즈 효과</div>
+      <div class="prop-row"><span class="prop-label">비네팅</span><div class="prop-right"><input type="range" class="sl" id="fxVignette" min="0" max="100" step="5" value="${FX.vignette}" oninput="FX.vignette=+this.value;this.nextElementSibling.textContent=this.value"><span class="prop-val">${FX.vignette}</span></div></div>
+      <div class="prop-row"><span class="prop-label">블러</span><div class="prop-right"><input type="range" class="sl" id="fxBlur" min="0" max="20" step="0.5" value="${FX.blur}" oninput="FX.blur=+this.value;this.nextElementSibling.textContent=this.value"><span class="prop-val">${FX.blur}</span></div></div>
+      <div class="prop-row"><span class="prop-label">색수차</span><div class="prop-right"><input type="range" class="sl" id="fxChromatic" min="0" max="20" step="1" value="${FX.chromatic}" oninput="FX.chromatic=+this.value;this.nextElementSibling.textContent=this.value"><span class="prop-val">${FX.chromatic}</span></div></div>
+    </div>
+    <div class="prop-group">
+      <div class="prop-title">필름 효과</div>
+      <div class="prop-row"><span class="prop-label">그레인</span><div class="prop-right"><input type="range" class="sl" id="fxGrain" min="0" max="100" step="5" value="${FX.grain}" oninput="FX.grain=+this.value;this.nextElementSibling.textContent=this.value"><span class="prop-val">${FX.grain}</span></div></div>
+      <div class="prop-row"><span class="prop-label">글리치</span><input type="checkbox" class="tog" id="fxGlitch" ${FX.glitch?'checked':''} onchange="FX.glitch=this.checked"></div>
+      <div class="prop-row"><span class="prop-label">스캔라인</span><input type="checkbox" class="tog" id="fxScanlines" ${FX.scanlines?'checked':''} onchange="FX.scanlines=this.checked"></div>
+    </div>
+    <div class="prop-group">
+      <div class="prop-title">스크린 효과</div>
+      <div class="prop-row"><span class="prop-label">CRT 모니터</span><input type="checkbox" class="tog" id="fxCrt" ${FX.crt?'checked':''} onchange="FX.crt=this.checked"></div>
+      <div class="prop-row"><span class="prop-label">픽셀화</span><div class="prop-right"><input type="range" class="sl" id="fxPixelate" min="0" max="20" step="1" value="${FX.pixelate}" oninput="FX.pixelate=+this.value;this.nextElementSibling.textContent=this.value"><span class="prop-val">${FX.pixelate}</span></div></div>
+      <div class="prop-row"><span class="prop-label">RGB 분리</span><div class="prop-right"><input type="range" class="sl" id="fxRgbSplit" min="0" max="15" step="1" value="${FX.rgbSplit}" oninput="FX.rgbSplit=+this.value;this.nextElementSibling.textContent=this.value"><span class="prop-val">${FX.rgbSplit}</span></div></div>
+      <div class="prop-row"><span class="prop-label">미러</span><input type="checkbox" class="tog" id="fxMirror" ${FX.mirror?'checked':''} onchange="FX.mirror=this.checked"></div>
+      <div class="prop-row"><span class="prop-label">반전</span><input type="checkbox" class="tog" id="fxInvert" ${FX.invert?'checked':''} onchange="FX.invert=this.checked"></div>
+      <div class="prop-row"><span class="prop-label">엠보스</span><input type="checkbox" class="tog" id="fxEmboss" ${FX.emboss?'checked':''} onchange="FX.emboss=this.checked"></div>
+    </div>
+    <div class="prop-group">
+      <div class="prop-title">모션 효과</div>
+      <div class="prop-row"><span class="prop-label">흔들림</span><div class="prop-right"><input type="range" class="sl" id="fxShake" min="0" max="20" step="1" value="${FX.shake}" oninput="FX.shake=+this.value;this.nextElementSibling.textContent=this.value"><span class="prop-val">${FX.shake}</span></div></div>
+      <div class="prop-row"><span class="prop-label">플래시</span><div class="prop-right"><input type="range" class="sl" id="fxFlash" min="0" max="100" step="5" value="${FX.flash}" oninput="FX.flash=+this.value;this.nextElementSibling.textContent=this.value"><span class="prop-val">${FX.flash}</span></div></div>
+      <div class="prop-row"><span class="prop-label">줌 펄스</span><div class="prop-right"><input type="range" class="sl" id="fxZoomPulse" min="0" max="20" step="1" value="${FX.zoom_pulse}" oninput="FX.zoom_pulse=+this.value;this.nextElementSibling.textContent=this.value"><span class="prop-val">${FX.zoom_pulse}</span></div></div>
+      <div class="prop-row"><span class="prop-label">노이즈</span><div class="prop-right"><input type="range" class="sl" id="fxNoise" min="0" max="100" step="5" value="${FX.noise}" oninput="FX.noise=+this.value;this.nextElementSibling.textContent=this.value"><span class="prop-val">${FX.noise}</span></div></div>
+      <div class="prop-row"><span class="prop-label">드림</span><div class="prop-right"><input type="range" class="sl" id="fxDream" min="0" max="100" step="5" value="${FX.dream}" oninput="FX.dream=+this.value;this.nextElementSibling.textContent=this.value"><span class="prop-val">${FX.dream}</span></div></div>
+      <div class="prop-row"><span class="prop-label">레터박스</span><div class="prop-right"><input type="range" class="sl" id="fxLetterbox" min="0" max="25" step="1" value="${FX.letterbox}" oninput="FX.letterbox=+this.value;this.nextElementSibling.textContent=this.value"><span class="prop-val">${FX.letterbox}</span></div></div>
+    </div>
+    <div class="prop-group">
+      <div class="btn-row">
+        <button class="btn btn-g" onclick="Object.keys(FX).forEach(k=>{FX[k]=typeof FX[k]==='boolean'?false:0});showToolProps('effects');">전체 초기화</button>
+      </div>
+    </div>`;
+}
+
+function audioPropsHTML() {
+  const hasAudio = video.captureStream && video.mozCaptureStream || true;
+  return `
+    <div class="props-header">오디오</div>
+    <div class="prop-group">
+      <div class="prop-row"><span class="prop-label">음소거</span><input type="checkbox" class="tog" id="audioMute" ${audioSettings.muted?'checked':''} onchange="audioSettings.muted=this.checked;video.muted=this.checked"></div>
+      <div class="prop-row"><span class="prop-label">볼륨</span><div class="prop-right"><input type="range" class="sl" id="audioVolume" min="0" max="1.5" step="0.05" value="${audioSettings.volume}"><span class="prop-val">${Math.round(audioSettings.volume*100)}%</span></div></div>
+    </div>
+    <div class="prop-group">
+      <div class="prop-title">페이드</div>
+      <div class="prop-row"><span class="prop-label">페이드 인</span><div class="prop-right"><input type="range" class="sl" id="audioFadeIn" min="0" max="5" step="0.5" value="${audioSettings.fadeIn}"><span class="prop-val">${audioSettings.fadeIn}s</span></div></div>
+      <div class="prop-row"><span class="prop-label">페이드 아웃</span><div class="prop-right"><input type="range" class="sl" id="audioFadeOut" min="0" max="5" step="0.5" value="${audioSettings.fadeOut}"><span class="prop-val">${audioSettings.fadeOut}s</span></div></div>
+    </div>
+    <div class="prop-group">
+      <div class="prop-title">오디오 정보</div>
+      <div class="prop-row"><span class="prop-label">소스</span><span class="prop-val" style="width:80px;color:var(--text2)">원본 오디오</span></div>
+      <div class="waveform-box"><canvas id="waveformCanvas"></canvas></div>
+    </div>`;
+}
+
+// ═══════ Script Demo Props ═══════
+function scriptPropsHTML() {
+  const wpList = scriptWaypoints.map((wp, i) => {
+    const icons = { move:'→', click:'🖱', dblclick:'🖱🖱', scroll:'↕', wait:'⏸' };
+    const sel = wp === selectedWaypoint ? ' selected' : '';
+    const hasText = wp.text ? ' 💬' : '';
+    const hasAudio = ttsAudioBuffers[wp.id] ? ' 🔊' : '';
+    return `<div class="tl-wp${sel}" style="position:relative;display:flex;margin-bottom:3px;width:100%;left:0;top:0;bottom:0;" onclick="selectWaypoint(${i})">
+      <span class="wp-icon">${icons[wp.action]||'→'}</span>
+      <span>${i+1}. ${fmtT(wp.t)} (${wp.action})${hasText}${hasAudio}</span>
+    </div>`;
+  }).join('');
+
+  const ttsCount = Object.keys(ttsAudioBuffers).length;
+  const ttsWpCount = scriptWaypoints.filter(w => w.text).length;
+
+  return `
+    <div class="props-header">스크립트 데모 🎬</div>
+    <div class="prop-group">
+      <p style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.5;">
+        마우스 경로를 미리 설정하고, 나레이션을 추가하여<br>자동 데모 영상을 만들 수 있습니다.
+      </p>
+      <div class="prop-row"><span class="prop-label">스크립트 모드</span><input type="checkbox" class="tog" id="scriptModeToggle" ${scriptMode?'checked':''} onchange="scriptMode=this.checked;updateScriptTrackVisibility();saveState();"></div>
+      <div class="prop-row"><span class="prop-label">TTS 자동 재생</span><input type="checkbox" class="tog" ${ttsAutoPlay?'checked':''} onchange="ttsAutoPlay=this.checked;"></div>
+    </div>
+    <div class="prop-group">
+      <div class="prop-title">Gemini TTS</div>
+      <input type="password" class="inp" id="geminiKey" placeholder="Gemini API Key" value="${geminiApiKey}" style="margin-bottom:6px;"
+        onchange="geminiApiKey=this.value;localStorage.setItem('geminiApiKey',this.value)">
+      <div class="prop-row"><span class="prop-label">음성</span>
+        <select class="sel" id="ttsVoiceSelect" onchange="ttsVoice=this.value;localStorage.setItem('ttsVoice',this.value)">
+          ${['Kore','Charon','Fenrir','Aoede','Puck','Leda','Orus','Zephyr'].map(v =>
+            `<option value="${v}" ${ttsVoice===v?'selected':''}>${v}</option>`
+          ).join('')}
+        </select>
+      </div>
+      ${ttsCount > 0 ? `<div style="font-size:9px;color:var(--green);margin-top:4px;">✓ ${ttsCount}/${ttsWpCount} 오디오 생성됨</div>` : ''}
+    </div>
+    <div class="prop-group">
+      <div class="prop-title">웨이포인트 (${scriptWaypoints.length})</div>
+      <p style="font-size:10px;color:var(--text3);margin-bottom:6px;">프리뷰를 클릭하여 경로 포인트를 추가하세요.</p>
+      <div style="max-height:200px;overflow-y:auto;margin-bottom:6px;">${wpList || '<div style="color:var(--text3);font-size:10px;text-align:center;padding:8px;">포인트 없음</div>'}</div>
+      <div class="btn-row">
+        <button class="btn btn-a" onclick="addWaypointAtPlayhead()">+ 현재 위치</button>
+        <button class="btn btn-g" onclick="generateAllTTS()">${ttsGenerating ? '생성 중...' : '전체 TTS 생성'}</button>
+      </div>
+      ${scriptWaypoints.length > 0 ? `
+      <div class="btn-row" style="margin-top:4px;">
+        <button class="btn" style="background:linear-gradient(135deg, var(--green), #00cec9);color:white;flex:1;" onclick="${autoReplayActive ? 'stopAutoReplay()' : 'startAutoReplay();startSmoothAutoMouse();'}">
+          ${autoReplayActive ? '⏹ 리플레이 중지' : '▶ 자동 리플레이'}
+        </button>
+      </div>` : ''}
+      <div class="btn-row" style="margin-top:4px;">
+        <button class="btn btn-g" onclick="importCursorToScript()">커서 가져오기</button>
+        <button class="btn btn-g" onclick="importCursorWithClicks()">커서+클릭</button>
+      </div>
+      <div class="btn-row" style="margin-top:4px;">
+        <button class="btn btn-g" style="color:var(--red);" onclick="if(confirm('모든 웨이포인트를 삭제할까요?')){scriptWaypoints=[];selectedWaypoint=null;ttsAudioBuffers={};ttsAudioElements={};renderScriptTrack();showToolProps('script');saveState();}">전체 삭제</button>
+      </div>
+    </div>`;
+}
+
+function scriptWpEditPropsHTML() {
+  const wp = selectedWaypoint;
+  if (!wp) return scriptPropsHTML();
+  const idx = scriptWaypoints.indexOf(wp);
+  const hasAudio = !!ttsAudioBuffers[wp.id];
+  return `
+    <div class="props-header">웨이포인트 #${idx+1}</div>
+    <div class="prop-group">
+      <div class="prop-row"><span class="prop-label">시간</span><div class="prop-right"><input type="number" class="inp" id="wpTime" value="${wp.t.toFixed(2)}" step="0.1" min="0" max="${getDur()}" style="width:80px;" onchange="wp=selectedWaypoint;if(wp){wp.t=+this.value;scriptWaypoints.sort((a,b)=>a.t-b.t);renderScriptTrack();}"></div></div>
+      <div class="prop-row"><span class="prop-label">위치</span><span class="prop-val" style="width:auto;">${(wp.x*100).toFixed(0)}%, ${(wp.y*100).toFixed(0)}%</span></div>
+      <div class="prop-row"><span class="prop-label">액션</span>
+        <select class="sel" id="wpAction" onchange="if(selectedWaypoint){selectedWaypoint.action=this.value;renderScriptTrack();}">
+          ${['move','click','dblclick','scroll','wait'].map(a =>
+            `<option value="${a}" ${wp.action===a?'selected':''}>${
+              a==='move'?'이동':a==='click'?'클릭':a==='dblclick'?'더블클릭':a==='scroll'?'스크롤':a==='wait'?'대기':a
+            }</option>`
+          ).join('')}
+        </select>
+      </div>
+      <div class="prop-row"><span class="prop-label">체류 시간</span><div class="prop-right"><input type="range" class="sl" id="wpDuration" min="0" max="5" step="0.1" value="${wp.duration||0}" oninput="if(selectedWaypoint){selectedWaypoint.duration=+this.value;this.nextElementSibling.textContent=this.value+'s';}"><span class="prop-val">${(wp.duration||0)}s</span></div></div>
+    </div>
+    <div class="prop-group">
+      <div class="prop-title">나레이션</div>
+      <textarea class="inp" id="wpNarration" rows="3" placeholder="이 포인트에서 말할 내용..." onchange="if(selectedWaypoint)selectedWaypoint.text=this.value;">${wp.text||''}</textarea>
+      <div class="btn-row" style="margin-top:6px;">
+        <button class="btn btn-a" onclick="generateWpTTS()" ${!geminiApiKey?'disabled':''}>${ttsGenerating?'생성 중...':'TTS 생성'}</button>
+        <button class="btn btn-g" onclick="previewWpTTS()" ${!hasAudio?'disabled':''}>미리 듣기</button>
+      </div>
+      ${hasAudio ? '<div style="font-size:9px;color:var(--green);margin-top:4px;">✓ 오디오 생성됨</div>' : ''}
+    </div>
+    <div class="prop-group">
+      <div class="btn-row">
+        <button class="btn btn-g" onclick="selectedWaypoint=null;showToolProps('script');">← 목록</button>
+        <button class="btn btn-g" style="color:var(--red);" onclick="deleteSelectedWaypoint()">삭제</button>
+      </div>
+    </div>`;
+}
+
+function selectWaypoint(idx) {
+  selectedWaypoint = scriptWaypoints[idx];
+  if (selectedWaypoint) video.currentTime = selectedWaypoint.t;
+  showToolProps('script-edit');
+  renderScriptTrack();
+}
+
+function addWaypointAtPlayhead() {
+  const t = video.currentTime;
+  const c = getCursorAt(t * 1000);
+  const wp = { id: Date.now(), t, x: c.x, y: c.y, action: 'move', duration: 0, text: '' };
+  scriptWaypoints.push(wp);
+  scriptWaypoints.sort((a, b) => a.t - b.t);
+  selectedWaypoint = wp;
+  updateScriptTrackVisibility();
+  renderScriptTrack();
+  showToolProps('script-edit');
+  saveState();
+}
+
+function deleteSelectedWaypoint() {
+  if (!selectedWaypoint) return;
+  scriptWaypoints = scriptWaypoints.filter(w => w !== selectedWaypoint);
+  delete ttsAudioBuffers[selectedWaypoint.id];
+  delete ttsAudioElements[selectedWaypoint.id];
+  selectedWaypoint = null;
+  renderScriptTrack();
+  showToolProps('script');
+  saveState();
+}
+
+function importCursorToScript() {
+  if (!cursorPositions.length) return;
+  // Sample every 2 seconds
+  const dur = getDur();
+  const interval = 2;
+  scriptWaypoints = [];
+  for (let t = 0; t < dur; t += interval) {
+    const c = getCursorAt(t * 1000);
+    scriptWaypoints.push({ id: Date.now() + t * 1000, t, x: c.x, y: c.y, action: 'move', duration: 0, text: '' });
+  }
+  updateScriptTrackVisibility();
+  renderScriptTrack();
+  showToolProps('script');
+  saveState();
+}
+
+function importCursorWithClicks() {
+  if (!cursorPositions.length) return;
+  scriptWaypoints = [];
+  const dur = getDur();
+  // Add click positions as waypoints
+  if (cursorClicks.length > 0) {
+    for (const ck of cursorClicks) {
+      const t = ck.t / 1000;
+      if (t > dur) continue;
+      scriptWaypoints.push({
+        id: Date.now() + Math.random() * 10000,
+        t, x: ck.x, y: ck.y,
+        action: 'click', duration: 0.3, text: ''
+      });
+    }
+  }
+  // Fill gaps with move waypoints (sample every 2s, avoid duplicates near clicks)
+  const interval = 2;
+  for (let t = 0; t < dur; t += interval) {
+    const nearClick = scriptWaypoints.some(w => Math.abs(w.t - t) < 0.8);
+    if (nearClick) continue;
+    const c = getCursorAt(t * 1000);
+    scriptWaypoints.push({
+      id: Date.now() + t * 1000 + Math.random() * 1000,
+      t, x: c.x, y: c.y,
+      action: 'move', duration: 0, text: ''
+    });
+  }
+  scriptWaypoints.sort((a, b) => a.t - b.t);
+  scriptMode = true;
+  updateScriptTrackVisibility();
+  renderScriptTrack();
+  showToolProps('script');
+  saveState();
+}
+
+function updateScriptTrackVisibility() {
+  const row = $('scriptTrackRow');
+  if (row) row.style.display = (scriptWaypoints.length > 0 || currentTool === 'script' || currentTool === 'script-edit') ? '' : 'none';
+}
+
+// ═══════ Gemini TTS ═══════
+async function generateTTS(wp) {
+  if (!wp || !wp.text || !geminiApiKey) return false;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`;
+  const body = {
+    contents: [{ parts: [{ text: wp.text }] }],
+    generationConfig: {
+      responseModalities: ['AUDIO'],
+      speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: ttsVoice } } }
+    }
+  };
+  try {
+    const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!resp.ok) { const err = await resp.json(); throw new Error(err.error?.message || `HTTP ${resp.status}`); }
+    const data = await resp.json();
+    const audioPart = data.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+    if (!audioPart) throw new Error('No audio in response');
+    const raw = atob(audioPart.inlineData.data);
+    const buffer = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) buffer[i] = raw.charCodeAt(i);
+    ttsAudioBuffers[wp.id] = buffer.buffer;
+    const blob = new Blob([buffer], { type: audioPart.inlineData.mimeType || 'audio/wav' });
+    ttsAudioElements[wp.id] = new Audio(URL.createObjectURL(blob));
+    return true;
+  } catch (e) {
+    console.error('TTS failed:', e);
+    return false;
+  }
+}
+
+async function generateWpTTS() {
+  if (!selectedWaypoint || !selectedWaypoint.text || !geminiApiKey) return;
+  ttsGenerating = true;
+  showToolProps('script-edit');
+  const ok = await generateTTS(selectedWaypoint);
+  ttsGenerating = false;
+  showToolProps('script-edit');
+  if (!ok) alert('TTS 생성 실패. API 키와 텍스트를 확인하세요.');
+}
+
+function previewWpTTS() {
+  if (!selectedWaypoint || !ttsAudioElements[selectedWaypoint.id]) return;
+  ttsAudioElements[selectedWaypoint.id].currentTime = 0;
+  ttsAudioElements[selectedWaypoint.id].play();
+}
+
+async function generateAllTTS() {
+  if (!geminiApiKey) { alert('Gemini API 키를 입력하세요.'); return; }
+  const wps = scriptWaypoints.filter(w => w.text && !ttsAudioBuffers[w.id]);
+  if (!wps.length) { alert('생성할 나레이션이 없습니다.'); return; }
+  ttsGenerating = true;
+  showToolProps('script');
+  for (let i = 0; i < wps.length; i++) {
+    await generateTTS(wps[i]);
+    if (i < wps.length - 1) await new Promise(r => setTimeout(r, 500)); // rate limit
+  }
+  ttsGenerating = false;
+  showToolProps('script');
+}
+
+// ═══════ TTS Auto-Playback ═══════
+function triggerTTSAtTime(currentTime) {
+  for (const wp of scriptWaypoints) {
+    if (ttsPlayedWaypoints.has(wp.id)) continue;
+    const audioEl = ttsAudioElements[wp.id];
+    if (!audioEl) continue;
+    // Trigger when playhead is within 0.15s of waypoint time
+    if (Math.abs(currentTime - wp.t) < 0.15) {
+      ttsPlayedWaypoints.add(wp.id);
+      if (ttsCurrentlyPlaying) {
+        ttsCurrentlyPlaying.pause();
+        ttsCurrentlyPlaying.currentTime = 0;
+      }
+      audioEl.currentTime = 0;
+      audioEl.play().catch(() => {});
+      ttsCurrentlyPlaying = audioEl;
+    }
+  }
+}
+
+function stopAllTTS() {
+  if (ttsCurrentlyPlaying) {
+    ttsCurrentlyPlaying.pause();
+    ttsCurrentlyPlaying.currentTime = 0;
+    ttsCurrentlyPlaying = null;
+  }
+  // Stop all TTS audio elements
+  for (const id of Object.keys(ttsAudioElements)) {
+    const el = ttsAudioElements[id];
+    if (el && !el.paused) { el.pause(); el.currentTime = 0; }
+  }
+}
+
+// Reset TTS tracking on seek
+video.addEventListener('seeked', () => {
+  // Clear played set so TTS can re-trigger after seeking
+  ttsPlayedWaypoints.clear();
+  stopAllTTS();
+});
+
+// ═══════ Script Auto-Replay (실제 마우스 제어) ═══════
+let autoReplayActive = false;
+let autoReplayTimer = null;
+let autoReplayExecutedWps = new Set();
+
+function startAutoReplay() {
+  if (autoReplayActive || !scriptWaypoints.length) return;
+  autoReplayActive = true;
+  autoReplayExecutedWps.clear();
+  ttsPlayedWaypoints.clear();
+  showToolProps('script');
+
+  // Start from first waypoint
+  const firstWp = scriptWaypoints[0];
+  video.currentTime = Math.max(0, firstWp.t - 0.5);
+  video.play();
+  $('playBtn').textContent = '⏸';
+
+  autoReplayTimer = setInterval(() => {
+    if (video.paused || !autoReplayActive) {
+      stopAutoReplay();
+      return;
+    }
+    const ct = video.currentTime;
+    for (const wp of scriptWaypoints) {
+      if (autoReplayExecutedWps.has(wp.id)) continue;
+      // Execute action when within 0.1s of waypoint time
+      if (Math.abs(ct - wp.t) < 0.1) {
+        autoReplayExecutedWps.add(wp.id);
+        executeWaypointAction(wp);
+      }
+    }
+  }, 50);
+}
+
+function stopAutoReplay() {
+  autoReplayActive = false;
+  if (autoReplayTimer) {
+    clearInterval(autoReplayTimer);
+    autoReplayTimer = null;
+  }
+  showToolProps('script');
+}
+
+function executeWaypointAction(wp) {
+  if (!window.electronAPI) return;
+  const pos = { x: wp.x, y: wp.y };
+
+  switch (wp.action) {
+    case 'move':
+      window.electronAPI.autoMouseMove(pos);
+      break;
+    case 'click':
+      window.electronAPI.autoMouseClick({ ...pos, button: 'left' });
+      break;
+    case 'dblclick':
+      window.electronAPI.autoMouseClick({ ...pos, button: 'left' });
+      setTimeout(() => window.electronAPI.autoMouseClick({ ...pos, button: 'left' }), 100);
+      break;
+    case 'scroll':
+      window.electronAPI.autoMouseScroll({ ...pos, delta: 3 });
+      break;
+    case 'wait':
+      window.electronAPI.autoMouseMove(pos);
+      break;
+  }
+}
+
+// Smooth cursor movement along path during auto-replay
+let autoMouseMoveTimer = null;
+
+function startSmoothAutoMouse() {
+  if (autoMouseMoveTimer) clearInterval(autoMouseMoveTimer);
+  autoMouseMoveTimer = setInterval(() => {
+    if (!autoReplayActive || video.paused) {
+      clearInterval(autoMouseMoveTimer);
+      autoMouseMoveTimer = null;
+      return;
+    }
+    const ms = video.currentTime * 1000;
+    const cur = getScriptedCursorAt(ms);
+    if (cur && window.electronAPI) {
+      window.electronAPI.autoMouseMove({ x: cur.x, y: cur.y });
+    }
+  }, 50); // 20fps mouse movement
+}
+
+// ═══════ Script Timeline Track ═══════
+function renderScriptTrack() {
+  const track = $('scriptTrack');
+  if (!track) return;
+  track.querySelectorAll('.tl-wp').forEach(e => e.remove());
+  const dur = getDur(); if (!dur) return;
+  const icons = { move:'→', click:'🖱', dblclick:'⏩', scroll:'↕', wait:'⏸' };
+  scriptWaypoints.forEach((wp, idx) => {
+    const el = document.createElement('div');
+    el.className = 'tl-wp' + (wp === selectedWaypoint ? ' selected' : '');
+    const wpDur = Math.max(0.3, wp.duration || 0.3);
+    el.style.left = (wp.t / dur * 100) + '%';
+    el.style.width = (wpDur / dur * 100) + '%';
+    el.innerHTML = `<span class="wp-icon">${icons[wp.action]||'→'}</span>${idx+1}`;
+    el.title = `#${idx+1} ${wp.action} @ ${fmtT(wp.t)}${wp.text ? '\n' + wp.text.substring(0,30) : ''}`;
+    el.addEventListener('click', (e) => { e.stopPropagation(); selectWaypoint(idx); });
+    // Drag to move in time
+    el.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      e.stopPropagation();
+      const startX = e.clientX, origT = wp.t;
+      let dragged = false;
+      const onMove = (ev) => {
+        if (Math.abs(ev.clientX - startX) < 5 && !dragged) return;
+        dragged = true;
+        const rect = track.getBoundingClientRect();
+        const dt = ((ev.clientX - startX) / rect.width) * dur;
+        wp.t = Math.max(0, Math.min(dur, origT + dt));
+        renderScriptTrack();
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        if (dragged) { scriptWaypoints.sort((a, b) => a.t - b.t); saveState(); }
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+    track.appendChild(el);
+  });
+}
+
+function bindAudioControls() {
+  const volSlider = $('audioVolume');
+  if (volSlider) {
+    volSlider.addEventListener('input', () => {
+      audioSettings.volume = parseFloat(volSlider.value);
+      video.volume = audioSettings.volume;
+      volSlider.nextElementSibling.textContent = Math.round(audioSettings.volume * 100) + '%';
+    });
+  }
+  const fadeInSlider = $('audioFadeIn');
+  if (fadeInSlider) {
+    fadeInSlider.addEventListener('input', () => {
+      audioSettings.fadeIn = parseFloat(fadeInSlider.value);
+      fadeInSlider.nextElementSibling.textContent = fadeInSlider.value + 's';
+    });
+  }
+  const fadeOutSlider = $('audioFadeOut');
+  if (fadeOutSlider) {
+    fadeOutSlider.addEventListener('input', () => {
+      audioSettings.fadeOut = parseFloat(fadeOutSlider.value);
+      fadeOutSlider.nextElementSibling.textContent = fadeOutSlider.value + 's';
+    });
+  }
+  // Draw simple waveform placeholder
+  const wfc = $('waveformCanvas');
+  if (wfc) {
+    const wctx = wfc.getContext('2d');
+    const wr = wfc.parentElement.getBoundingClientRect();
+    wfc.width = wr.width * 2; wfc.height = wr.height * 2;
+    wctx.fillStyle = '#2e2e52';
+    const bars = 80;
+    for (let i = 0; i < bars; i++) {
+      const h = (Math.random() * 0.6 + 0.2) * wfc.height;
+      const x = (i / bars) * wfc.width;
+      const w = wfc.width / bars - 1;
+      wctx.fillRect(x, (wfc.height - h) / 2, w, h);
+    }
+  }
+}
+
+// ═══════ Audio Fade during Playback ═══════
+video.addEventListener('timeupdate', () => {
+  if (audioSettings.muted) return;
+  const t = video.currentTime;
+  const dur = getDur();
+  let vol = audioSettings.volume;
+  if (audioSettings.fadeIn > 0 && t - trimStart < audioSettings.fadeIn) {
+    vol *= Math.max(0, (t - trimStart) / audioSettings.fadeIn);
+  }
+  if (audioSettings.fadeOut > 0 && trimEnd - t < audioSettings.fadeOut) {
+    vol *= Math.max(0, (trimEnd - t) / audioSettings.fadeOut);
+  }
+  if (Math.abs(video.volume - vol) > 0.01) video.volume = Math.max(0, Math.min(1, vol));
+});
+
+// ═══════ Project Save/Load ═══════
+function getProjectData() {
+  return {
+    version: 3,
+    subtitles: JSON.parse(JSON.stringify(subtitles)),
+    cuts: JSON.parse(JSON.stringify(cuts)),
+    splitPoints: [...splitPoints],
+    transitions: JSON.parse(JSON.stringify(transitions)),
+    annotations: JSON.parse(JSON.stringify(annotations)),
+    segmentSpeeds: {...segmentSpeeds},
+    cropEnabled, cropRect: {...cropRect},
+    trimStart, trimEnd, selectedBg,
+    S: {...S}, FX: {...FX},
+    activeFilter, audioSettings: {...audioSettings},
+    aspectRatioOverride,
+    scriptWaypoints: JSON.parse(JSON.stringify(scriptWaypoints)),
+    scriptMode,
+  };
+}
+
+async function saveProject() {
+  const data = JSON.stringify(getProjectData(), null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const buf = await blob.arrayBuffer();
+  const fp = await window.electronAPI.saveVideoDialog('octo-project.json');
+  if (fp) {
+    await window.electronAPI.writeFile({ filePath: fp, buffer: buf });
+  }
+}
+
+function loadProjectFromJSON(json) {
+  try {
+    const d = JSON.parse(json);
+    subtitles = d.subtitles || [];
+    cuts = d.cuts || [];
+    splitPoints = d.splitPoints || [];
+    transitions = d.transitions || {};
+    annotations = d.annotations || [];
+    segmentSpeeds = d.segmentSpeeds || {};
+    cropEnabled = d.cropEnabled || false;
+    cropRect = d.cropRect || { top:0,right:0,bottom:0,left:0 };
+    trimStart = d.trimStart || 0;
+    trimEnd = d.trimEnd || getDur();
+    selectedBg = d.selectedBg || 'none';
+    if (d.S) Object.assign(S, d.S);
+    if (d.FX) Object.assign(FX, d.FX);
+    activeFilter = d.activeFilter || 'none';
+    if (d.audioSettings) Object.assign(audioSettings, d.audioSettings);
+    aspectRatioOverride = d.aspectRatioOverride || null;
+    if (d.scriptWaypoints) scriptWaypoints = JSON.parse(JSON.stringify(d.scriptWaypoints));
+    if (d.scriptMode !== undefined) scriptMode = d.scriptMode;
+    selectedSub = null; selectedSegIdx = -1; selectedWaypoint = null;
+    renderSubTrack(); renderCutTrack(); renderSplitMarkers(); renderSegments(); renderScriptTrack();
+    updateScriptTrackVisibility();
+    updateTrimUI(); resizeCanvas(); showToolProps(currentTool); saveState();
+  } catch(e) { console.error('Project load error:', e); }
 }
 
 function bindProps() {
@@ -1093,8 +2123,39 @@ function bindProps() {
   }
 }
 
+// ═══════ Scripted Cursor ═══════
+function getScriptedCursorAt(ms) {
+  if (!scriptWaypoints.length) return { x: 0.5, y: 0.5, action: null };
+  const sec = ms / 1000;
+  // Find surrounding waypoints
+  let lo = 0, hi = scriptWaypoints.length - 1;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (scriptWaypoints[m].t < sec) lo = m + 1; else hi = m; }
+  if (lo === 0) return { x: scriptWaypoints[0].x, y: scriptWaypoints[0].y, action: scriptWaypoints[0].action };
+  const a = scriptWaypoints[lo - 1], b = scriptWaypoints[lo];
+  // Handle wait/duration
+  if (a.duration > 0 && sec < a.t + a.duration) {
+    return { x: a.x, y: a.y, action: a.action, progress: (sec - a.t) / a.duration };
+  }
+  const startT = a.t + (a.duration || 0);
+  const endT = b.t;
+  if (startT >= endT) return { x: b.x, y: b.y, action: b.action };
+  const rawP = Math.max(0, Math.min(1, (sec - startT) / (endT - startT)));
+  // Ease-in-out for smooth movement
+  const t = rawP < 0.5 ? 2 * rawP * rawP : 1 - Math.pow(-2 * rawP + 2, 2) / 2;
+  // Catmull-Rom control points for smooth curves
+  const prev = lo >= 2 ? scriptWaypoints[lo - 2] : a;
+  const next = lo < scriptWaypoints.length - 1 ? scriptWaypoints[lo + 1] : b;
+  const cp1x = a.x + (b.x - prev.x) / 6, cp1y = a.y + (b.y - prev.y) / 6;
+  const cp2x = b.x - (next.x - a.x) / 6, cp2y = b.y - (next.y - a.y) / 6;
+  const u = 1 - t;
+  const x = u*u*u*a.x + 3*u*u*t*cp1x + 3*u*t*t*cp2x + t*t*t*b.x;
+  const y = u*u*u*a.y + 3*u*u*t*cp1y + 3*u*t*t*cp2y + t*t*t*b.y;
+  return { x, y, action: rawP > 0.95 ? b.action : 'move', progress: rawP };
+}
+
 // ═══════ Cursor Helpers ═══════
 function getCursorAt(ms) {
+  if (scriptMode && scriptWaypoints.length > 0) return getScriptedCursorAt(ms);
   if (!cursorPositions.length) return {x:0.5,y:0.5};
   let lo=0,hi=cursorPositions.length-1;
   while(lo<hi){const m=(lo+hi)>>1;cursorPositions[m].t<ms?lo=m+1:hi=m;}
@@ -1112,6 +2173,201 @@ function cursorMoving(ms) {
   return (ms-lastMovingTime)<1500;
 }
 
+// ═══════ Cubic Bezier Easing ═══════
+function cubicBezier(t, p1x, p1y, p2x, p2y) {
+  const cx=3*p1x, bx=3*(p2x-p1x)-cx, ax=1-cx-bx;
+  const cy=3*p1y, by=3*(p2y-p1y)-cy, ay=1-cy-by;
+  function sX(t){return((ax*t+bx)*t+cx)*t;}
+  function sY(t){return((ay*t+by)*t+cy)*t;}
+  function sDX(t){return(3*ax*t+2*bx)*t+cx;}
+  let g=t;
+  for(let i=0;i<8;i++){const e=sX(g)-t;if(Math.abs(e)<1e-6)break;const d=sDX(g);if(Math.abs(d)<1e-6)break;g-=e/d;}
+  g=Math.max(0,Math.min(1,g));
+  return sY(g);
+}
+
+const easePresets = {
+  linear:    [0, 0, 1, 1],
+  easeIn:    [0.42, 0, 1, 1],
+  easeOut:   [0, 0, 0.58, 1],
+  easeInOut: [0.42, 0, 0.58, 1],
+};
+
+function getEasedValue(progress) {
+  const p = easePresets[S.easePreset] || easePresets.easeOut;
+  return cubicBezier(Math.max(0, Math.min(1, progress)), p[0], p[1], p[2], p[3]);
+}
+
+// ═══════ Zoom Transition State ═══════
+let zoomTransition = {
+  startTime: 0, duration: 600,
+  fromScale: 1, toScale: 1,
+  fromX: 0.5, fromY: 0.5, toX: 0.5, toY: 0.5,
+  active: false,
+};
+
+function startZoomTransition(ms, toScale, toX, toY) {
+  // Only start a new bezier transition for significant scale changes (zoom in/out)
+  const scaleChanged = Math.abs(toScale - zoomTransition.toScale) > 0.05;
+  if (scaleChanged) {
+    zoomTransition.startTime = ms;
+    zoomTransition.duration = Math.max(200, S.zoomSmooth * 20000);
+    zoomTransition.fromScale = curScale;
+    zoomTransition.toScale = toScale;
+    zoomTransition.active = true;
+  }
+  // Always update target position for EMA tracking
+  zoomTransition.toX = toX;
+  zoomTransition.toY = toY;
+  if (!scaleChanged && !zoomTransition.active) {
+    zoomTransition.toScale = toScale;
+  }
+}
+
+function applyZoomTransition(ms) {
+  // Scale: use bezier easing if transition active, otherwise EMA
+  if (zoomTransition.active) {
+    const elapsed = ms - zoomTransition.startTime;
+    const progress = Math.min(1, elapsed / zoomTransition.duration);
+    const eased = getEasedValue(progress);
+    curScale = zoomTransition.fromScale + (zoomTransition.toScale - zoomTransition.fromScale) * eased;
+    if (progress >= 1) zoomTransition.active = false;
+  } else {
+    // EMA fallback for smooth scale tracking
+    curScale += (zoomTransition.toScale - curScale) * S.zoomSmooth * 0.3;
+  }
+  // Position: always use EMA for smooth continuous cursor tracking
+  const posFactor = Math.max(S.zoomSmooth * 5, 0.08);
+  curX += (zoomTransition.toX - curX) * posFactor;
+  curY += (zoomTransition.toY - curY) * posFactor;
+}
+
+// ═══════ Velocity-based Zoom ═══════
+function getCursorVelocity(ms) {
+  const w=300, n=6; let totalDist=0;
+  for(let i=0;i<n;i++){
+    const t1=ms-w+(w/n)*i, t2=ms-w+(w/n)*(i+1);
+    const p1=getCursorAt(t1), p2=getCursorAt(t2);
+    totalDist+=Math.hypot(p2.x-p1.x, p2.y-p1.y);
+  }
+  return totalDist/(w/1000); // normalized units per second
+}
+
+function getVelocityZoomLevel(ms) {
+  const vel=getCursorVelocity(ms);
+  // maxVel calibrated so typical fast cursor movement (~0.5 norm-units/sec) maps to 1.0
+  const maxVel = 0.8;
+  const t=Math.min(1, vel/maxVel);
+  // Slow=more zoom, fast=less zoom (smooth curve)
+  // At vel=0: full zoomLevel. At vel=maxVel: still 70% of zoomLevel
+  return 1+(S.zoomLevel-1)*Math.max(0.3, 1-t*0.7);
+}
+
+// ═══════ Dwell Area Detection ═══════
+function getCursorDwellArea(ms) {
+  const dwellWindow=500, samples=10;
+  let minX=1,maxX=0,minY=1,maxY=0;
+  for(let i=0;i<samples;i++){
+    const t=ms-dwellWindow+(dwellWindow/samples)*i;
+    const p=getCursorAt(t);
+    minX=Math.min(minX,p.x);maxX=Math.max(maxX,p.x);
+    minY=Math.min(minY,p.y);maxY=Math.max(maxY,p.y);
+  }
+  const spread=Math.hypot(maxX-minX, maxY-minY);
+  if(spread<0.05) return {x:(minX+maxX)/2, y:(minY+maxY)/2, dwelling:true};
+  return {dwelling:false, x:0.5, y:0.5};
+}
+
+// ═══════ Movement Prediction ═══════
+function predictCursorDirection(ms) {
+  const dt=100;
+  const p1=getCursorAt(ms-dt), p2=getCursorAt(ms);
+  const vx=(p2.x-p1.x)/dt*200; // extrapolate 200ms ahead
+  const vy=(p2.y-p1.y)/dt*200;
+  return {x:Math.max(0,Math.min(1,p2.x+vx)), y:Math.max(0,Math.min(1,p2.y+vy))};
+}
+
+// ═══════ Click Zoom ═══════
+let cursorClicks = [];
+let clicksEstimated = false;
+
+function estimateClicksFromCursorData() {
+  // Heuristic: detect "sudden stops" as likely click events
+  // A click typically shows: movement → sudden stop (< 50ms) → slight movement
+  if (!cursorPositions.length || cursorClicks.length > 0) return;
+  const minGap = 300; // minimum ms between detected clicks
+  let lastClickT = -minGap;
+  for (let i = 5; i < cursorPositions.length - 3; i++) {
+    const t = cursorPositions[i].t;
+    if (t - lastClickT < minGap) continue;
+    // Check velocity before (moving) and at this point (stopped)
+    const p0 = cursorPositions[i - 3], p1 = cursorPositions[i - 1], p2 = cursorPositions[i], p3 = cursorPositions[i + 2];
+    if (!p0 || !p1 || !p2 || !p3) continue;
+    const velBefore = Math.hypot(p1.x - p0.x, p1.y - p0.y) / Math.max(1, p1.t - p0.t);
+    const velAt = Math.hypot(p2.x - p1.x, p2.y - p1.y) / Math.max(1, p2.t - p1.t);
+    const velAfter = Math.hypot(p3.x - p2.x, p3.y - p2.y) / Math.max(1, p3.t - p2.t);
+    // Sudden deceleration pattern: was moving, then stopped, optionally moves again
+    if (velBefore > 0.00005 && velAt < 0.00001 && (velAfter > 0.00002 || velAt < 0.000005)) {
+      cursorClicks.push({ t: t, x: p2.x, y: p2.y });
+      lastClickT = t;
+    }
+  }
+  clicksEstimated = true;
+}
+
+function getRecentClick(ms, windowMs) {
+  windowMs = windowMs || 1500;
+  for(let i=cursorClicks.length-1;i>=0;i--){
+    const c=cursorClicks[i];
+    if(c.t<=ms && ms-c.t<windowMs) return c;
+    if(c.t<ms-windowMs) break;
+  }
+  return null;
+}
+
+// ═══════ Unified Zoom Computation ═══════
+function computeZoomTarget(ms) {
+  let ts=1, tx=0.5, ty=0.5;
+
+  // Keyframe override
+  const kf = getKfAt(ms/1000);
+  if (kf && zoomKeyframes.length) {
+    return { scale: kf.zoom, x: kf.x, y: kf.y };
+  }
+
+  if (!S.autoZoom || !cursorPositions.length) return { scale: 1, x: 0.5, y: 0.5 };
+
+  const c = getCursorAt(ms);
+  tx = c.x; ty = c.y;
+
+  // Click zoom (highest priority)
+  const recentClick = S.clickZoom ? getRecentClick(ms, 1500) : null;
+  if (recentClick) {
+    ts = S.zoomLevel * 1.2;
+    tx = recentClick.x;
+    ty = recentClick.y;
+  } else if (cursorMoving(ms)) {
+    // Velocity-based zoom
+    ts = S.velocityZoom ? getVelocityZoomLevel(ms) : S.zoomLevel;
+  } else if (S.dwellZoom) {
+    // Dwell area detection
+    const dwell = getCursorDwellArea(ms);
+    if (dwell.dwelling) {
+      ts = S.zoomLevel * 0.8; // slight zoom on dwell area
+      tx = dwell.x; ty = dwell.y;
+    }
+  }
+
+  // Movement prediction (blend)
+  if (S.predictPan && cursorMoving(ms) && ts > 1.05) {
+    const pred = predictCursorDirection(ms);
+    tx = tx * 0.7 + pred.x * 0.3;
+    ty = ty * 0.7 + pred.y * 0.3;
+  }
+
+  return { scale: ts, x: tx, y: ty };
+}
+
 // ═══════ Subtitle Helpers ═══════
 function getSubAnim(sub,t){const d=sub.end-sub.start,e=t-sub.start,r=sub.end-t;const fi=Math.min(1,e/Math.min(0.3,d*0.15)),fo=Math.min(1,r/Math.min(0.3,d*0.15));return{fi,fo,p:Math.min(1,e/d),e};}
 function rrect(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.quadraticCurveTo(x+w,y,x+w,y+r);c.lineTo(x+w,y+h-r);c.quadraticCurveTo(x+w,y+h,x+w-r,y+h);c.lineTo(x+r,y+h);c.quadraticCurveTo(x,y+h,x,y+h-r);c.lineTo(x,y+r);c.quadraticCurveTo(x,y,x+r,y);c.closePath();}
@@ -1124,17 +2380,10 @@ function render() {
   const dpr=window.devicePixelRatio,W=canvas.width/dpr,H=canvas.height/dpr;
   const ms=video.currentTime*1000;
 
-  // Zoom
-  let ts=1,tx=0.5,ty=0.5;
-  const kf=getKfAt(video.currentTime);
-  if(kf&&zoomKeyframes.length){ts=kf.zoom;tx=kf.x;ty=kf.y;}
-  else if(S.autoZoom&&cursorPositions.length>0){
-    const c=getCursorAt(ms);tx=c.x;ty=c.y;
-    ts=cursorMoving(ms)?S.zoomLevel:1;
-  }
-  const posFactor=Math.max(S.zoomSmooth*5,0.08);
-  curScale+=(ts-curScale)*S.zoomSmooth*0.3;
-  curX+=(tx-curX)*posFactor;curY+=(ty-curY)*posFactor;
+  // Zoom (bezier easing + velocity/dwell/click/prediction)
+  const zTarget = computeZoomTarget(ms);
+  startZoomTransition(ms, zTarget.scale, zTarget.x, zTarget.y);
+  applyZoomTransition(ms);
 
   const sc=curScale,pad=S.padding,rad=S.radius;
   const sW=vw/sc,sH=vh/sc;
@@ -1157,10 +2406,250 @@ function render() {
 
   // Video
   ctx.save();rrect(ctx,oX,oY,rW,rH,rad);ctx.clip();
-  ctx.filter=`brightness(${S.brightness}) contrast(${S.contrast}) saturate(${S.saturate})`;
-  ctx.drawImage(video,sX,sY,sW,sH,oX,oY,rW,rH);
-  ctx.filter='none';
+  // Build filter string combining manual settings + filter preset
+  const fp = filterPresets[activeFilter] || filterPresets.none;
+  const effB = S.brightness * fp.brightness;
+  const effC = S.contrast * fp.contrast;
+  const effS = S.saturate * fp.saturate;
+  let filterStr = `brightness(${effB}) contrast(${effC}) saturate(${effS})`;
+  if (fp.hueRotate) filterStr += ` hue-rotate(${fp.hueRotate}deg)`;
+  if (fp.sepia) filterStr += ` sepia(${fp.sepia})`;
+  if (FX.blur > 0) filterStr += ` blur(${FX.blur}px)`;
+  ctx.filter = filterStr;
 
+  // Chromatic aberration - draw offset RGB channels
+  if (FX.chromatic > 0) {
+    const ca = FX.chromatic * (rW / 800);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.drawImage(video, sX, sY, sW, sH, oX, oY, rW, rH);
+    ctx.filter = 'none';
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.5;
+    ctx.filter = filterStr + ' saturate(0) brightness(0.8)';
+    ctx.drawImage(video, sX, sY, sW, sH, oX - ca, oY, rW, rH); // Red shift
+    ctx.drawImage(video, sX, sY, sW, sH, oX + ca, oY, rW, rH); // Blue shift
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+    ctx.filter = 'none';
+  } else {
+    ctx.drawImage(video, sX, sY, sW, sH, oX, oY, rW, rH);
+    ctx.filter = 'none';
+  }
+
+  // Filter color overlay
+  if (fp.overlay) { ctx.fillStyle = fp.overlay; ctx.fillRect(oX, oY, rW, rH); }
+
+  // Temperature overlay
+  if (FX.temperature !== 0) {
+    const t2 = FX.temperature;
+    ctx.fillStyle = t2 > 0 ? `rgba(255,140,0,${Math.abs(t2)/400})` : `rgba(0,100,255,${Math.abs(t2)/400})`;
+    ctx.fillRect(oX, oY, rW, rH);
+  }
+
+  // Tint overlay
+  if (FX.tint !== 0) {
+    const ti = FX.tint;
+    ctx.fillStyle = ti > 0 ? `rgba(200,0,200,${Math.abs(ti)/500})` : `rgba(0,200,0,${Math.abs(ti)/500})`;
+    ctx.fillRect(oX, oY, rW, rH);
+  }
+
+  // Highlights (brighten light areas)
+  if (FX.highlights > 0) {
+    ctx.fillStyle = `rgba(255,255,255,${FX.highlights/500})`;
+    ctx.fillRect(oX, oY, rW, rH);
+  } else if (FX.highlights < 0) {
+    ctx.fillStyle = `rgba(0,0,0,${Math.abs(FX.highlights)/500})`;
+    ctx.fillRect(oX, oY, rW, rH);
+  }
+
+  // Shadows
+  if (FX.shadows > 0) {
+    ctx.fillStyle = `rgba(255,255,255,${FX.shadows/600})`;
+    ctx.fillRect(oX, oY, rW, rH);
+  } else if (FX.shadows < 0) {
+    ctx.fillStyle = `rgba(0,0,0,${Math.abs(FX.shadows)/400})`;
+    ctx.fillRect(oX, oY, rW, rH);
+  }
+
+  // Fade (lifted blacks)
+  if (FX.fadeAmount > 0) {
+    ctx.fillStyle = `rgba(128,128,128,${FX.fadeAmount/200})`;
+    ctx.fillRect(oX, oY, rW, rH);
+  }
+
+  // Vignette
+  if (FX.vignette > 0) {
+    const vcx2 = oX + rW/2, vcy2 = oY + rH/2;
+    const vr2 = Math.max(rW, rH) * 0.7;
+    const vg2 = ctx.createRadialGradient(vcx2, vcy2, vr2 * 0.3, vcx2, vcy2, vr2);
+    vg2.addColorStop(0, 'rgba(0,0,0,0)');
+    vg2.addColorStop(1, `rgba(0,0,0,${FX.vignette/100})`);
+    ctx.fillStyle = vg2;
+    ctx.fillRect(oX, oY, rW, rH);
+  }
+
+  // Glitch effect
+  if (FX.glitch && Math.random() < 0.3) {
+    const sliceH = rH * (0.02 + Math.random() * 0.08);
+    const sliceY = oY + Math.random() * (rH - sliceH);
+    const shift = (Math.random() - 0.5) * rW * 0.1;
+    ctx.drawImage(canvas, oX * dpr, sliceY * dpr, rW * dpr, sliceH * dpr, oX + shift, sliceY, rW, sliceH);
+  }
+
+  // Scanlines
+  if (FX.scanlines) {
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    for (let sy2 = oY; sy2 < oY + rH; sy2 += 3) {
+      ctx.fillRect(oX, sy2, rW, 1);
+    }
+  }
+
+  // ── Screen Effects ──
+
+  // CRT Monitor effect (curved scanlines + green tint + barrel distortion simulation)
+  if (FX.crt) {
+    // Horizontal scanlines (thicker, with phosphor glow)
+    ctx.fillStyle = 'rgba(0,0,0,0.12)';
+    for (let cy = oY; cy < oY + rH; cy += 4) { ctx.fillRect(oX, cy, rW, 2); }
+    // RGB phosphor dots
+    ctx.fillStyle = 'rgba(0,255,0,0.03)';
+    ctx.fillRect(oX, oY, rW, rH);
+    // Edge darkening (barrel distortion simulation)
+    const crtG = ctx.createRadialGradient(oX+rW/2, oY+rH/2, Math.min(rW,rH)*0.3, oX+rW/2, oY+rH/2, Math.max(rW,rH)*0.7);
+    crtG.addColorStop(0, 'rgba(0,0,0,0)');
+    crtG.addColorStop(0.7, 'rgba(0,0,0,0)');
+    crtG.addColorStop(1, 'rgba(0,0,0,0.4)');
+    ctx.fillStyle = crtG; ctx.fillRect(oX, oY, rW, rH);
+    // Flicker
+    if (Math.random() < 0.05) { ctx.fillStyle = 'rgba(255,255,255,0.03)'; ctx.fillRect(oX, oY, rW, rH); }
+  }
+
+  // Pixelate effect
+  if (FX.pixelate > 1) {
+    const pxSize = Math.max(2, Math.round(FX.pixelate));
+    const tmpCvs = document.createElement('canvas');
+    const tmpCtx = tmpCvs.getContext('2d');
+    const smallW = Math.ceil(rW / pxSize), smallH = Math.ceil(rH / pxSize);
+    tmpCvs.width = smallW; tmpCvs.height = smallH;
+    tmpCtx.drawImage(canvas, oX * dpr, oY * dpr, rW * dpr, rH * dpr, 0, 0, smallW, smallH);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(tmpCvs, 0, 0, smallW, smallH, oX, oY, rW, rH);
+    ctx.imageSmoothingEnabled = true;
+  }
+
+  // RGB Split effect (different from chromatic - intentional aesthetic)
+  if (FX.rgbSplit > 0) {
+    const rs = FX.rgbSplit * (rW / 500);
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.globalAlpha = 0.7;
+    // Red channel shift
+    ctx.drawImage(canvas, oX * dpr, oY * dpr, rW * dpr, rH * dpr, oX - rs, oY + rs * 0.5, rW, rH);
+    // Blue channel shift
+    ctx.drawImage(canvas, oX * dpr, oY * dpr, rW * dpr, rH * dpr, oX + rs, oY - rs * 0.5, rW, rH);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  // Mirror effect (horizontal flip right half)
+  if (FX.mirror) {
+    ctx.save();
+    ctx.translate(oX + rW, oY);
+    ctx.scale(-1, 1);
+    ctx.drawImage(canvas, oX * dpr, oY * dpr, (rW/2) * dpr, rH * dpr, 0, 0, rW/2, rH);
+    ctx.restore();
+  }
+
+  // Invert colors
+  if (FX.invert) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'difference';
+    ctx.fillStyle = 'white';
+    ctx.fillRect(oX, oY, rW, rH);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.restore();
+  }
+
+  // Shake effect
+  if (FX.shake > 0 && !video.paused) {
+    const shakeAmt = FX.shake * 0.5;
+    const shX = (Math.random() - 0.5) * shakeAmt;
+    const shY = (Math.random() - 0.5) * shakeAmt;
+    ctx.save();
+    ctx.drawImage(canvas, oX * dpr, oY * dpr, rW * dpr, rH * dpr, oX + shX, oY + shY, rW, rH);
+    ctx.restore();
+  }
+
+  // Flash effect (periodic bright flash)
+  if (FX.flash > 0) {
+    const flashPhase = (ms / 1000 * 2) % 1; // 2 flashes per second
+    if (flashPhase < 0.05) {
+      ctx.fillStyle = `rgba(255,255,255,${FX.flash / 150})`;
+      ctx.fillRect(oX, oY, rW, rH);
+    }
+  }
+
+  // Zoom pulse effect
+  if (FX.zoom_pulse > 0 && !video.paused) {
+    const pulse = Math.sin(ms / 300) * FX.zoom_pulse * 0.002;
+    if (Math.abs(pulse) > 0.001) {
+      ctx.save();
+      ctx.translate(oX + rW/2, oY + rH/2);
+      ctx.scale(1 + pulse, 1 + pulse);
+      ctx.translate(-(oX + rW/2), -(oY + rH/2));
+      ctx.drawImage(canvas, oX * dpr, oY * dpr, rW * dpr, rH * dpr, oX, oY, rW, rH);
+      ctx.restore();
+    }
+  }
+
+  // Noise (static) effect
+  if (FX.noise > 0) {
+    const noiseAlpha = FX.noise / 500;
+    if (!grainCanvas) { grainCanvas = document.createElement('canvas'); grainCtx = grainCanvas.getContext('2d'); }
+    const nw = Math.round(rW / 3), nh = Math.round(rH / 3);
+    if (grainCanvas.width !== nw || grainCanvas.height !== nh) { grainCanvas.width = nw; grainCanvas.height = nh; }
+    const nid = grainCtx.createImageData(nw, nh); const nd = nid.data;
+    for (let ni = 0; ni < nd.length; ni += 4) {
+      const nv = Math.random() > 0.5 ? 255 : 0;
+      nd[ni] = nd[ni+1] = nd[ni+2] = nv; nd[ni+3] = 255;
+    }
+    grainCtx.putImageData(nid, 0, 0);
+    ctx.save(); ctx.globalAlpha = noiseAlpha;
+    ctx.drawImage(grainCanvas, oX, oY, rW, rH);
+    ctx.restore();
+  }
+
+  // Dream effect (soft glow + desaturation)
+  if (FX.dream > 0) {
+    ctx.save();
+    ctx.globalAlpha = FX.dream / 200;
+    ctx.filter = `blur(${Math.min(8, FX.dream / 10)}px) brightness(1.2)`;
+    ctx.drawImage(canvas, oX * dpr, oY * dpr, rW * dpr, rH * dpr, oX, oY, rW, rH);
+    ctx.filter = 'none';
+    ctx.globalAlpha = FX.dream / 400;
+    ctx.fillStyle = 'rgba(200,180,255,0.5)';
+    ctx.fillRect(oX, oY, rW, rH);
+    ctx.restore();
+  }
+
+  // Letterbox (cinematic bars)
+  if (FX.letterbox > 0) {
+    const barH = rH * (FX.letterbox / 100);
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(oX, oY, rW, barH);
+    ctx.fillRect(oX, oY + rH - barH, rW, barH);
+  }
+
+  // Emboss effect
+  if (FX.emboss) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'overlay';
+    ctx.globalAlpha = 0.5;
+    ctx.drawImage(canvas, (oX + 1) * dpr, (oY + 1) * dpr, rW * dpr, rH * dpr, oX, oY, rW, rH);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.restore();
+  }
 
   // Highlight effect - darken edges, brighten around cursor
   if(S.highlight&&sc>1.05&&cursorPositions.length>0){
@@ -1208,10 +2697,93 @@ function render() {
       ctx.lineWidth = Math.max(1, cSize * 0.07);
       ctx.stroke();
       ctx.restore();
+
+      // Script mode: click ripple & action animations
+      if (scriptMode && scriptWaypoints.length > 0) {
+        const curResult = getScriptedCursorAt(ms);
+        // Click ripple
+        if (curResult.action === 'click' || curResult.action === 'dblclick') {
+          const nearWp = scriptWaypoints.find(w => Math.abs(w.t * 1000 - ms) < 400);
+          if (nearWp) {
+            const elapsed = ms - nearWp.t * 1000;
+            if (elapsed >= 0 && elapsed < 400) {
+              const rp = elapsed / 400;
+              ctx.beginPath();
+              ctx.arc(cx2, cy2, 30 * rp * S.cursorSize, 0, Math.PI * 2);
+              ctx.strokeStyle = `rgba(124,111,245,${(1 - rp) * 0.8})`;
+              ctx.lineWidth = 2; ctx.stroke();
+              if (curResult.action === 'dblclick' && elapsed > 150) {
+                ctx.beginPath();
+                ctx.arc(cx2, cy2, 30 * ((elapsed - 150) / 400) * S.cursorSize, 0, Math.PI * 2);
+                ctx.stroke();
+              }
+            }
+          }
+        }
+        // Wait pulse
+        if (curResult.action === 'wait' && curResult.progress != null) {
+          const pulse = 0.5 + 0.5 * Math.sin((curResult.progress || 0) * Math.PI * 4);
+          ctx.beginPath(); ctx.arc(cx2, cy2, 8 + pulse * 4, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(80,208,160,${0.3 + pulse * 0.3})`; ctx.lineWidth = 1.5; ctx.stroke();
+        }
+      }
+      // Recorded click ripple (non-script mode)
+      if (!scriptMode && cursorClicks.length > 0) {
+        const clickWindowMs = 500;
+        for (const ck of cursorClicks) {
+          const elapsed = ms - ck.t;
+          if (elapsed >= 0 && elapsed < clickWindowMs) {
+            const ckx = oX + ((ck.x * vw - sX) / sW) * rW;
+            const cky = oY + ((ck.y * vh - sY) / sH) * rH;
+            if (ckx >= oX && ckx <= oX + rW && cky >= oY && cky <= oY + rH) {
+              const rp = elapsed / clickWindowMs;
+              // Outer ripple
+              ctx.beginPath();
+              ctx.arc(ckx, cky, 35 * rp * S.cursorSize, 0, Math.PI * 2);
+              ctx.strokeStyle = `rgba(124,111,245,${(1 - rp) * 0.7})`;
+              ctx.lineWidth = 2.5; ctx.stroke();
+              // Inner ripple
+              ctx.beginPath();
+              ctx.arc(ckx, cky, 18 * rp * S.cursorSize, 0, Math.PI * 2);
+              ctx.strokeStyle = `rgba(167,139,250,${(1 - rp) * 0.5})`;
+              ctx.lineWidth = 1.5; ctx.stroke();
+              // Click dot
+              if (rp < 0.3) {
+                ctx.beginPath();
+                ctx.arc(ckx, cky, 4 * (1 - rp / 0.3) * S.cursorSize, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(124,111,245,${(1 - rp / 0.3) * 0.8})`;
+                ctx.fill();
+              }
+            }
+          }
+        }
+      }
     }
   }
 
   ctx.restore(); // clip
+
+  // ── Film Grain ──
+  if (FX.grain > 0) {
+    if (!grainCanvas) { grainCanvas = document.createElement('canvas'); grainCtx = grainCanvas.getContext('2d'); }
+    if (Date.now() - lastGrainUpdate > 50) {
+      grainCanvas.width = Math.round(W / 2); grainCanvas.height = Math.round(H / 2);
+      const gid = grainCtx.createImageData(grainCanvas.width, grainCanvas.height);
+      const gd = gid.data;
+      for (let gi = 0; gi < gd.length; gi += 4) {
+        const gv = Math.random() * 255;
+        gd[gi] = gd[gi+1] = gd[gi+2] = gv; gd[gi+3] = 255;
+      }
+      grainCtx.putImageData(gid, 0, 0);
+      lastGrainUpdate = Date.now();
+    }
+    ctx.save();
+    ctx.globalAlpha = FX.grain / 300;
+    ctx.globalCompositeOperation = 'overlay';
+    ctx.drawImage(grainCanvas, oX, oY, rW, rH);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.restore();
+  }
 
   // ── Webcam overlay ──
   if (hasWebcam && S.webcamVisible && webcamVideo.videoWidth > 0) {
@@ -1282,24 +2854,46 @@ function render() {
     ctx.restore();
   });
 
-  // ── Transition fade effect ──
+  // ── Transition effects (6 types) ──
   splitPoints.forEach(sp => {
     const tr = transitions[sp.toFixed(3)];
     if (!tr) return;
     const halfDur = (tr.duration || 0.5) / 2;
     const t = video.currentTime;
-    if (t >= sp - halfDur && t <= sp + halfDur) {
-      const progress = (t - (sp - halfDur)) / (halfDur * 2);
-      if (tr.type === 'fade') {
-        const fadeAlpha = progress < 0.5 ? progress * 2 * 0.5 : (1 - progress) * 2 * 0.5;
-        ctx.fillStyle = `rgba(0,0,0,${fadeAlpha})`;
-        ctx.fillRect(oX, oY, rW, rH);
-      } else if (tr.type === 'wipe') {
-        ctx.fillStyle = 'rgba(0,0,0,0.8)';
-        const wipeX = progress < 0.5 ? oX : oX + rW * (1 - (progress - 0.5) * 2);
-        const wipeW = progress < 0.5 ? rW * progress * 2 : rW * (progress - 0.5) * 2;
-        ctx.fillRect(wipeX, oY, wipeW, rH);
-      }
+    if (t < sp - halfDur || t > sp + halfDur) return;
+    const progress = (t - (sp - halfDur)) / (halfDur * 2);
+    const p2 = progress < 0.5 ? progress * 2 : (1 - progress) * 2; // triangle 0→1→0
+
+    if (tr.type === 'fade') {
+      ctx.fillStyle = `rgba(0,0,0,${p2 * 0.5})`;
+      ctx.fillRect(oX, oY, rW, rH);
+    } else if (tr.type === 'wipe') {
+      ctx.fillStyle = 'rgba(0,0,0,0.8)';
+      const wipeX = progress < 0.5 ? oX : oX + rW * (1 - (progress - 0.5) * 2);
+      const wipeW = progress < 0.5 ? rW * progress * 2 : rW * (progress - 0.5) * 2;
+      ctx.fillRect(wipeX, oY, wipeW, rH);
+    } else if (tr.type === 'dissolve') {
+      ctx.fillStyle = `rgba(255,255,255,${p2 * 0.6})`;
+      ctx.fillRect(oX, oY, rW, rH);
+    } else if (tr.type === 'zoom') {
+      ctx.save();
+      const zs = 1 + p2 * 0.3;
+      ctx.translate(oX + rW/2, oY + rH/2);
+      ctx.scale(zs, zs);
+      ctx.translate(-(oX + rW/2), -(oY + rH/2));
+      ctx.fillStyle = `rgba(0,0,0,${p2 * 0.4})`;
+      ctx.fillRect(oX - rW, oY - rH, rW * 3, rH * 3);
+      ctx.restore();
+    } else if (tr.type === 'slide') {
+      ctx.save();
+      const slideOff = rW * (progress < 0.5 ? -progress * 2 : -(1 - progress) * 2) * 0.3;
+      ctx.fillStyle = `rgba(0,0,0,${p2 * 0.3})`;
+      ctx.fillRect(oX, oY, rW, rH);
+      ctx.restore();
+    } else if (tr.type === 'blur') {
+      // Simulate blur transition with semi-transparent overlay
+      ctx.fillStyle = `rgba(200,200,200,${p2 * 0.4})`;
+      ctx.fillRect(oX, oY, rW, rH);
     }
   });
 
@@ -1307,6 +2901,37 @@ function render() {
   renderAnnotations(ctx, video.currentTime, oX, oY, rW, rH, sX, sY, sW, sH, vw, vh);
 
   // ─��� Crop overlay (dim outside crop area) ──
+  // ── Script path visualization (editor only) ──
+  if ((currentTool === 'script' || currentTool === 'script-edit') && scriptWaypoints.length > 0) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(80,208,160,0.5)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    scriptWaypoints.forEach((wp, i) => {
+      const sx = oX + wp.x * rW, sy = oY + wp.y * rH;
+      if (i === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+    });
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const wIcons = { move:'\u2192', click:'\u25CF', dblclick:'\u25C9', scroll:'\u2195', wait:'\u23F8' };
+    scriptWaypoints.forEach((wp, idx) => {
+      const sx = oX + wp.x * rW, sy = oY + wp.y * rH;
+      const isSel = wp === selectedWaypoint;
+      const isCur = Math.abs(video.currentTime - wp.t) < 0.2;
+      ctx.beginPath(); ctx.arc(sx, sy, isSel ? 10 : 7, 0, Math.PI * 2);
+      ctx.fillStyle = isSel ? '#50d0a0' : isCur ? '#7c6ff5' : 'rgba(80,208,160,0.7)';
+      ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 9px -apple-system,sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(String(idx + 1), sx, sy);
+      ctx.font = '10px sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      ctx.fillText(wIcons[wp.action] || '\u2192', sx, sy + 16);
+      if (wp.text) { ctx.fillStyle = '#ffd54f'; ctx.beginPath(); ctx.arc(sx + 10, sy - 10, 3, 0, Math.PI * 2); ctx.fill(); }
+    });
+    ctx.restore();
+  }
+
   if (cropEnabled && (cropRect.top > 0 || cropRect.bottom > 0 || cropRect.left > 0 || cropRect.right > 0)) {
     ctx.fillStyle = 'rgba(0,0,0,0.7)';
     const cT = oY + rH * (cropRect.top / 100);
@@ -1322,11 +2947,40 @@ function render() {
     // Right strip
     if (cropRect.right > 0) ctx.fillRect(cR, cT, oX + rW - cR, cB - cT);
     // Crop border
-    ctx.strokeStyle = 'rgba(124,111,245,0.6)';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = 'rgba(124,111,245,0.8)';
+    ctx.lineWidth = 1.5;
     ctx.strokeRect(cL, cT, cR - cL, cB - cT);
-    ctx.setLineDash([]);
+    // Rule of thirds guides
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 0.5;
+    const cW = cR - cL, cH = cB - cT;
+    for (let i = 1; i <= 2; i++) {
+      ctx.beginPath(); ctx.moveTo(cL + cW * i / 3, cT); ctx.lineTo(cL + cW * i / 3, cB); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cL, cT + cH * i / 3); ctx.lineTo(cR, cT + cH * i / 3); ctx.stroke();
+    }
+    // Corner handles
+    const hs = 8; // handle size
+    ctx.fillStyle = 'rgba(124,111,245,1)';
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
+    const corners = [[cL, cT], [cR, cT], [cL, cB], [cR, cB]];
+    corners.forEach(([hx, hy]) => {
+      ctx.fillRect(hx - hs/2, hy - hs/2, hs, hs);
+      ctx.strokeRect(hx - hs/2, hy - hs/2, hs, hs);
+    });
+    // Edge handles (midpoints)
+    const midX = (cL + cR) / 2, midY = (cT + cB) / 2;
+    const edges = [[midX, cT], [midX, cB], [cL, midY], [cR, midY]];
+    edges.forEach(([hx, hy]) => {
+      ctx.fillRect(hx - hs/2, hy - hs/2, hs, hs);
+      ctx.strokeRect(hx - hs/2, hy - hs/2, hs, hs);
+    });
+    // Size label
+    const cropW = 100 - cropRect.left - cropRect.right;
+    const cropH = 100 - cropRect.top - cropRect.bottom;
+    ctx.font = '11px -apple-system,sans-serif';
+    ctx.fillStyle = 'rgba(124,111,245,0.9)';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText(`${cropW}% × ${cropH}%`, midX, cT - 4);
   }
 
   // ── Motion Blur ──
@@ -1444,7 +3098,7 @@ let annDrawStart = null;
 let annFreehandPoints = [];
 
 canvas.addEventListener('mousedown', (e) => {
-  if (currentTool !== 'annotate' || webcamDragging) return;
+  if (currentTool !== 'annotate' || webcamDragging || cropDragging) return;
   const rect = canvas.getBoundingClientRect();
   const dpr = window.devicePixelRatio;
   const W = canvas.width / dpr, H = canvas.height / dpr;
@@ -1466,6 +3120,66 @@ canvas.addEventListener('mousedown', (e) => {
   annFreehandPoints = [{ x: nx, y: ny }];
   e.preventDefault();
   e.stopPropagation();
+});
+
+// ═══════ Script Canvas Interaction ═══════
+canvas.addEventListener('mousedown', (e) => {
+  if (currentTool !== 'script' && currentTool !== 'script-edit') return;
+  if (webcamDragging || cropDragging) return;
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio;
+  const W = canvas.width / dpr, H = canvas.height / dpr;
+  const mx = (e.clientX - rect.left) * (W / rect.width);
+  const my = (e.clientY - rect.top) * (H / rect.height);
+  const vw2 = video.videoWidth, vh2 = video.videoHeight;
+  if (!vw2 || !vh2) return;
+  const pad = S.padding, va = vw2 / vh2;
+  const iW = W - pad * 2, iH = H - pad * 2;
+  let rW, rH, oX, oY;
+  if (va > iW / iH) { rW = iW; rH = rW / va; } else { rH = iH; rW = rH * va; }
+  oX = pad + (iW - rW) / 2; oY = pad + (iH - rH) / 2;
+  const nx = (mx - oX) / rW, ny = (my - oY) / rH;
+  if (nx < 0 || nx > 1 || ny < 0 || ny > 1) return;
+  e.preventDefault(); e.stopPropagation();
+
+  // Hit test existing waypoints
+  const hitWp = scriptWaypoints.find(wp => {
+    const sx = oX + wp.x * rW, sy = oY + wp.y * rH;
+    return Math.hypot(mx - sx, my - sy) < 15;
+  });
+
+  if (hitWp) {
+    scriptDraggingWp = hitWp;
+    selectedWaypoint = hitWp;
+    showToolProps('script-edit');
+    const startX = e.clientX, startY = e.clientY;
+    const origX = hitWp.x, origY = hitWp.y;
+    const onMove = (ev) => {
+      const mx2 = (ev.clientX - rect.left) * (W / rect.width);
+      const my2 = (ev.clientY - rect.top) * (H / rect.height);
+      hitWp.x = Math.max(0, Math.min(1, (mx2 - oX) / rW));
+      hitWp.y = Math.max(0, Math.min(1, (my2 - oY) / rH));
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      scriptDraggingWp = null;
+      showToolProps('script-edit');
+      saveState();
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  } else {
+    // Add new waypoint
+    const wp = { id: Date.now(), t: video.currentTime, x: nx, y: ny, action: 'click', duration: 0, text: '' };
+    scriptWaypoints.push(wp);
+    scriptWaypoints.sort((a, b) => a.t - b.t);
+    selectedWaypoint = wp;
+    updateScriptTrackVisibility();
+    renderScriptTrack();
+    showToolProps('script-edit');
+    saveState();
+  }
 });
 
 canvas.addEventListener('mousemove', (e) => {
@@ -1525,7 +3239,7 @@ function getKfAt(t){if(!zoomKeyframes.length)return null;const s=[...zoomKeyfram
 
 // ═══════ Playback ═══════
 function syncWebcam(){if(hasWebcam)webcamVideo.currentTime=video.currentTime;}
-function togglePlay(){if(video.paused){if(video.currentTime<trimStart||video.currentTime>=trimEnd)video.currentTime=trimStart;video.play();if(hasWebcam){webcamVideo.currentTime=video.currentTime;webcamVideo.play();}$('playBtn').textContent='⏸';}else{video.pause();if(hasWebcam)webcamVideo.pause();$('playBtn').textContent='▶';}}
+function togglePlay(){if(video.paused){if(video.currentTime<trimStart||video.currentTime>=trimEnd){video.currentTime=trimStart;ttsPlayedWaypoints.clear();}video.play();if(hasWebcam){webcamVideo.currentTime=video.currentTime;webcamVideo.play();}$('playBtn').textContent='⏸';}else{video.pause();if(hasWebcam)webcamVideo.pause();stopAllTTS();$('playBtn').textContent='▶';}}
 $('playBtn').addEventListener('click',togglePlay);
 $('speedBtn').addEventListener('click',()=>{speedIdx=(speedIdx+1)%speeds.length;playbackSpeed=speeds[speedIdx];video.playbackRate=playbackSpeed;$('speedBtn').textContent=playbackSpeed+'x';});
 
@@ -1543,6 +3257,10 @@ video.addEventListener('timeupdate',()=>{
     const idx=parseInt(el.dataset.idx);
     if(subtitles[idx])el.classList.toggle('selected',selectedSub===subtitles[idx]);
   });
+  // TTS auto-play during preview
+  if (!video.paused && scriptMode && ttsAutoPlay) {
+    triggerTTSAtTime(video.currentTime);
+  }
 });
 video.addEventListener('ended',()=>{$('playBtn').textContent='▶';});
 
@@ -1751,9 +3469,50 @@ function restoreSelectedSegment() {
   if (currentTool === 'export') showToolProps('export');
 }
 
+// ═══════ Snap System ═══════
+function getSnapTargets(excludeTimes) {
+  const dur = getDur();
+  const targets = new Set();
+  const segs = getSegments();
+  segs.forEach(s => { targets.add(s.start); targets.add(s.end); });
+  targets.add(video.currentTime); // playhead
+  // Round time values
+  const interval = dur <= 30 ? 1 : dur <= 120 ? 5 : 10;
+  for (let t = 0; t <= dur; t += interval) targets.add(t);
+  if (excludeTimes) excludeTimes.forEach(t => targets.delete(t));
+  return [...targets].sort((a, b) => a - b);
+}
+
+function findSnap(time, excludeTimes, thresholdSec) {
+  thresholdSec = thresholdSec || 0.15;
+  const targets = getSnapTargets(excludeTimes);
+  let best = null, bestDist = thresholdSec;
+  for (const t of targets) {
+    const d = Math.abs(time - t);
+    if (d < bestDist) { bestDist = d; best = t; }
+  }
+  return best;
+}
+
+function showSnapLine(track, time) {
+  removeSnapLine();
+  const dur = getDur();
+  const line = document.createElement('div');
+  line.className = 'tl-snap-line';
+  line.style.left = (time / dur * 100) + '%';
+  line.id = '_snapLine';
+  track.appendChild(line);
+}
+
+function removeSnapLine() {
+  const el = document.getElementById('_snapLine');
+  if (el) el.remove();
+}
+
 function renderSegments() {
   const track = $('videoTrack');
   track.querySelectorAll('.tl-segment').forEach(e => e.remove());
+  removeSnapLine();
   const dur = getDur(); if (!dur) return;
   const segs = getSegments();
   segs.forEach((seg, idx) => {
@@ -1763,16 +3522,148 @@ function renderSegments() {
     el.style.left = (seg.start / dur * 100) + '%';
     el.style.width = ((seg.end - seg.start) / dur * 100) + '%';
     const spd = segmentSpeeds[idx] || 1;
-    el.textContent = (seg.end - seg.start).toFixed(1) + 's' + (spd !== 1 ? ` (${spd}x)` : '');
+
+    // Inner content: label + resize handles
+    const label = document.createElement('span');
+    label.textContent = (seg.end - seg.start).toFixed(1) + 's' + (spd !== 1 ? ` ${spd}x` : '');
+    label.style.cssText = 'pointer-events:none;z-index:1;';
+    el.appendChild(label);
+
+    // Resize handles (left/right edges)
+    if (!seg.deleted) {
+      const lh = document.createElement('div');
+      lh.className = 'tl-segment-resize left';
+      el.appendChild(lh);
+      const rh = document.createElement('div');
+      rh.className = 'tl-segment-resize right';
+      el.appendChild(rh);
+
+      // Resize drag
+      [lh, rh].forEach((handle, hi) => {
+        const isLeft = hi === 0;
+        handle.addEventListener('mousedown', (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          const onMove = (ev) => {
+            const rect = track.getBoundingClientRect();
+            const pct = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
+            let sec = pct * dur;
+            // Snap
+            const snap = findSnap(sec, new Set([isLeft ? seg.start : seg.end]));
+            if (snap !== null) { sec = snap; showSnapLine(track, sec); } else { removeSnapLine(); }
+            // Adjust the split point
+            if (isLeft) {
+              const minTime = idx > 0 ? segs[idx - 1].start + 0.1 : trimStart;
+              sec = Math.max(minTime, Math.min(sec, seg.end - 0.1));
+              // Find and move the split point at seg.start
+              const spIdx = splitPoints.indexOf(seg.start);
+              if (spIdx >= 0) { splitPoints[spIdx] = sec; splitPoints.sort((a, b) => a - b); }
+              else if (Math.abs(seg.start - trimStart) > 0.05) { trimStart = sec; }
+            } else {
+              const maxTime = idx < segs.length - 1 ? segs[idx + 1].end - 0.1 : trimEnd;
+              sec = Math.min(maxTime, Math.max(sec, seg.start + 0.1));
+              const spIdx = splitPoints.indexOf(seg.end);
+              if (spIdx >= 0) { splitPoints[spIdx] = sec; splitPoints.sort((a, b) => a - b); }
+              else if (Math.abs(seg.end - trimEnd) > 0.05) { trimEnd = sec; }
+            }
+            renderSegments(); renderSplitMarkers(); updateTrimUI();
+          };
+          const onUp = () => {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            removeSnapLine();
+            saveState();
+          };
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', onUp);
+        });
+      });
+    }
+
+    // Speed visual
+    if (spd < 1) {
+      el.style.borderColor = 'rgba(100,181,246,0.6)';
+      el.style.background = 'linear-gradient(180deg, rgba(100,181,246,0.2), rgba(100,181,246,0.08))';
+    } else if (spd > 1) {
+      el.style.borderColor = 'rgba(255,213,79,0.6)';
+      el.style.background = 'linear-gradient(180deg, rgba(255,213,79,0.2), rgba(255,213,79,0.08))';
+    }
     el.title = seg.deleted
       ? `[삭제됨] ${fmtT(seg.start)}→${fmtT(seg.end)} — 클릭 후 ♻복원`
-      : `${fmtT(seg.start)}→${fmtT(seg.end)}${spd!==1?' 속도:'+spd+'x':''} — 클릭 선택 → Delete 삭제`;
-    el.addEventListener('click', (e) => {
+      : `${fmtT(seg.start)}→${fmtT(seg.end)}${spd!==1?' 속도:'+spd+'x':''} — 드래그 이동 | 가장자리 드래그로 크기 조절`;
+
+    // Click/drag handler
+    el.addEventListener('mousedown', (e) => {
+      if (e.target.classList.contains('tl-segment-resize')) return;
       e.stopPropagation();
-      selectedSegIdx = (selectedSegIdx === idx) ? -1 : idx;
-      renderSegments();
-      showSegmentSpeedUI();
+      const startX = e.clientX;
+      const origStart = seg.start, origEnd = seg.end, segDur = origEnd - origStart;
+      let dragged = false;
+
+      const onMove = (ev) => {
+        const dx = Math.abs(ev.clientX - startX);
+        if (dx < 5 && !dragged) return; // threshold
+        dragged = true;
+        el.classList.add('dragging');
+
+        const rect = track.getBoundingClientRect();
+        const dtSec = ((ev.clientX - startX) / rect.width) * dur;
+        let newStart = origStart + dtSec;
+        let newEnd = newStart + segDur;
+
+        // Clamp to bounds
+        if (newStart < trimStart) { newStart = trimStart; newEnd = newStart + segDur; }
+        if (newEnd > trimEnd) { newEnd = trimEnd; newStart = newEnd - segDur; }
+
+        // Snap start edge
+        const snapS = findSnap(newStart, new Set([origStart, origEnd]));
+        if (snapS !== null) {
+          newStart = snapS; newEnd = newStart + segDur;
+          showSnapLine(track, snapS);
+        } else {
+          // Snap end edge
+          const snapE = findSnap(newEnd, new Set([origStart, origEnd]));
+          if (snapE !== null) {
+            newEnd = snapE; newStart = newEnd - segDur;
+            showSnapLine(track, snapE);
+          } else {
+            removeSnapLine();
+          }
+        }
+
+        // Move split points
+        const leftSp = splitPoints.indexOf(origStart);
+        const rightSp = splitPoints.indexOf(origEnd);
+        if (leftSp >= 0) splitPoints[leftSp] = newStart;
+        if (rightSp >= 0) splitPoints[rightSp] = newEnd;
+        splitPoints.sort((a, b) => a - b);
+
+        // Visual update only
+        el.style.left = (newStart / dur * 100) + '%';
+        el.style.width = (segDur / dur * 100) + '%';
+      };
+
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        el.classList.remove('dragging');
+        removeSnapLine();
+
+        if (!dragged) {
+          // Click: select/deselect
+          selectedSegIdx = (selectedSegIdx === idx) ? -1 : idx;
+          renderSegments();
+          updateSpeedButtons();
+        } else {
+          renderSegments(); renderSplitMarkers(); renderCutTrack();
+          saveState();
+        }
+      };
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
     });
+
     track.appendChild(el);
   });
 }
@@ -1974,14 +3865,30 @@ setTimeout(() => { const btn = $('cursorToggleBtn'); if(btn) btn.classList.toggl
 // ═══════ Split & Transitions ═══════
 // ═══════ Segment Speed Control ═══════
 function setSegmentSpeed(speed) {
-  if (selectedSegIdx < 0) return;
+  // 세그먼트 미선택 시 현재 재생 위치의 세그먼트를 자동 선택
+  if (selectedSegIdx < 0) {
+    const segs = getSegments();
+    const ct = video.currentTime;
+    const si = segs.findIndex(s => ct >= s.start && ct < s.end);
+    if (si >= 0) selectedSegIdx = si;
+    else return;
+  }
   segmentSpeeds[selectedSegIdx] = speed;
   renderSegments();
+  updateSpeedButtons();
   saveState();
 }
 
-function showSegmentSpeedUI() {
-  // Speed is shown in action bar buttons, no extra UI needed
+function updateSpeedButtons() {
+  const spd = selectedSegIdx >= 0 ? (segmentSpeeds[selectedSegIdx] || 1) : -1;
+  ['spd05','spd1','spd15','spd2'].forEach(id => {
+    const el = $(id);
+    if (el) el.classList.remove('active');
+  });
+  if (spd === 0.5 && $('spd05')) $('spd05').classList.add('active');
+  else if (spd === 1 && $('spd1')) $('spd1').classList.add('active');
+  else if (spd === 1.5 && $('spd15')) $('spd15').classList.add('active');
+  else if (spd === 2 && $('spd2')) $('spd2').classList.add('active');
 }
 
 function getSegmentSpeedAt(t) {
@@ -2011,8 +3918,8 @@ function splitAtPlayhead() {
 function addTransition(splitTime, type) {
   const key = splitTime.toFixed(3);
   if (transitions[key]) {
-    // Cycle through types or remove
-    const types = ['fade','wipe','none'];
+    // Cycle through all 6 types + remove
+    const types = ['fade','wipe','dissolve','zoom','slide','blur','none'];
     const curIdx = types.indexOf(transitions[key].type);
     const nextType = types[(curIdx+1)%types.length];
     if (nextType === 'none') { delete transitions[key]; }
@@ -2045,7 +3952,8 @@ function renderSplitMarkers() {
       const tDur = tr.duration || 0.5;
       badge.style.left = ((sp - tDur/2) / dur * 100) + '%';
       badge.style.width = (tDur / dur * 100) + '%';
-      badge.textContent = tr.type === 'fade' ? '◐' : '◧';
+      const trIcons = {fade:'◐',wipe:'◧',dissolve:'◇',zoom:'⊕',slide:'◫',blur:'◉'};
+      badge.textContent = trIcons[tr.type] || '◐';
       badge.title = `${tr.type} (${tDur}s) - 클릭하여 변경`;
       badge.addEventListener('click', (e) => { e.stopPropagation(); addTransition(sp); });
       track.appendChild(badge);
@@ -2064,7 +3972,10 @@ function saveState() {
     segmentSpeeds: {...segmentSpeeds},
     cropEnabled, cropRect: {...cropRect},
     trimStart, trimEnd, selectedBg,
-    S: {...S},
+    S: {...S}, FX: {...FX},
+    activeFilter, audioSettings: {...audioSettings},
+    scriptWaypoints: JSON.parse(JSON.stringify(scriptWaypoints)),
+    scriptMode,
   };
   history = history.slice(0, historyIdx + 1);
   history.push(state);
@@ -2093,8 +4004,13 @@ function restoreState(state) {
   trimStart = state.trimStart; trimEnd = state.trimEnd;
   selectedBg = state.selectedBg;
   Object.assign(S, state.S);
-  selectedSub = null; selectedSegIdx = -1;
-  renderSubTrack(); renderCutTrack(); renderSplitMarkers(); renderSegments();
+  if (state.FX) Object.assign(FX, state.FX);
+  if (state.activeFilter) activeFilter = state.activeFilter;
+  if (state.audioSettings) Object.assign(audioSettings, state.audioSettings);
+  if (state.scriptWaypoints) scriptWaypoints = JSON.parse(JSON.stringify(state.scriptWaypoints));
+  if (state.scriptMode !== undefined) scriptMode = state.scriptMode;
+  selectedSub = null; selectedSegIdx = -1; selectedWaypoint = null;
+  renderSubTrack(); renderCutTrack(); renderSplitMarkers(); renderSegments(); renderScriptTrack();
   updateTrimUI(); showToolProps(currentTool);
   updateHistoryBtns();
 }
@@ -2159,6 +4075,7 @@ function renderCutTrack() {
   renderSegments();
   renderRuler();
   updateTrimUI();
+  renderTimelineWaveform();
 }
 
 function mergeCuts() {
@@ -2189,13 +4106,7 @@ function renderFrameToCanvas(targetTime){
   const oc=off.getContext('2d');
 
   const ms=targetTime*1000;
-  let ts=1,tx=0.5,ty=0.5;
-  const kf=getKfAt(targetTime);
-  if(kf&&zoomKeyframes.length){ts=kf.zoom;tx=kf.x;ty=kf.y;}
-  else if(S.autoZoom&&cursorPositions.length>0){
-    const c=getCursorAt(ms);tx=c.x;ty=c.y;
-    ts=cursorMoving(ms)?S.zoomLevel:1;
-  }
+  // Use current zoom state (already computed by render loop)
   const sc=curScale,pad=S.padding,rad=S.radius;
   const sW=vw/sc,sH=vh/sc;
   let sX=curX*vw-sW/2,sY=curY*vh-sH/2;
@@ -2340,7 +4251,47 @@ async function doExport(){
   if (hasCrop) { outOff.width = expW; outOff.height = expH; }
   const outOc = hasCrop ? outOff.getContext('2d') : null;
   const es=outOff.captureStream(30);
-  if(video.captureStream)video.captureStream().getAudioTracks().forEach(t=>es.addTrack(t));
+  // Audio mixing: original video audio + TTS narration
+  let exportAudioCtx = null;
+  const hasTTSAudio = scriptMode && Object.keys(ttsAudioBuffers).length > 0;
+  if (hasTTSAudio) {
+    try {
+      exportAudioCtx = new AudioContext();
+      const dest = exportAudioCtx.createMediaStreamDestination();
+      // Original video audio
+      if (video.captureStream) {
+        const vStream = video.captureStream();
+        const vaTracks = vStream.getAudioTracks();
+        if (vaTracks.length > 0) {
+          const src = exportAudioCtx.createMediaStreamSource(new MediaStream(vaTracks));
+          const gain = exportAudioCtx.createGain();
+          gain.gain.value = audioSettings.muted ? 0 : audioSettings.volume;
+          src.connect(gain).connect(dest);
+        }
+      }
+      // Schedule TTS audio at waypoint times
+      for (const wp of scriptWaypoints) {
+        const buf = ttsAudioBuffers[wp.id];
+        if (!buf) continue;
+        try {
+          const audioBuf = await exportAudioCtx.decodeAudioData(buf.slice(0));
+          const source = exportAudioCtx.createBufferSource();
+          source.buffer = audioBuf;
+          const gain = exportAudioCtx.createGain();
+          gain.gain.value = 0.8;
+          source.connect(gain).connect(dest);
+          const offset = wp.t - trimStart;
+          if (offset >= 0) source.start(exportAudioCtx.currentTime + offset);
+        } catch(e) { console.warn('TTS audio decode error:', e); }
+      }
+      dest.stream.getAudioTracks().forEach(t => es.addTrack(t));
+    } catch(e) {
+      console.warn('Audio mixing failed, using original:', e);
+      if(video.captureStream)video.captureStream().getAudioTracks().forEach(t=>es.addTrack(t));
+    }
+  } else {
+    if(video.captureStream)video.captureStream().getAudioTracks().forEach(t=>es.addTrack(t));
+  }
   const br=parseInt($('expBitrate')?.value||16000000);
   const rec=new MediaRecorder(es,{mimeType:'video/webm;codecs=vp9,opus',videoBitsPerSecond:br});
   const chunks=[];rec.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data);};
@@ -2367,20 +4318,48 @@ async function doExport(){
       if(fp){await window.electronAPI.writeFile({filePath:fp,buffer:buf});st.textContent='완료!';}
       else st.textContent='취소됨';
     }
+    if(exportAudioCtx){try{exportAudioCtx.close();}catch(e){}}
     btn.disabled=false;setTimeout(()=>{st.textContent='';},3000);
   };
-  curX=0.5;curY=0.5;curScale=1;video.currentTime=trimStart;
+  curX=0.5;curY=0.5;curScale=1;zoomTransition.active=false;video.currentTime=trimStart;
   await new Promise(r=>{video.onseeked=r;});
   if(hasWebcam){webcamVideo.currentTime=trimStart;await new Promise(r=>{webcamVideo.onseeked=r;});}
   rec.start(100);video.play();if(hasWebcam)webcamVideo.play();
   function ef(){if(video.ended||video.paused||video.currentTime>=trimEnd){video.pause();if(hasWebcam)webcamVideo.pause();rec.stop();return;}
     // Skip cut regions during export
     if(isInCutRegion(video.currentTime)){const nt=getNextNonCutTime(video.currentTime);if(nt>=trimEnd){video.pause();rec.stop();return;}video.currentTime=nt;return requestAnimationFrame(ef);}
-    const ms2=video.currentTime*1000;let ts2=1,tx2=0.5,ty2=0.5;const kf2=getKfAt(video.currentTime);
-    if(kf2&&zoomKeyframes.length){ts2=kf2.zoom;tx2=kf2.x;ty2=kf2.y;}else if(S.autoZoom&&cursorPositions.length){const c2=getCursorAt(ms2);tx2=c2.x;ty2=c2.y;ts2=cursorMoving(ms2)?S.zoomLevel:1;}
-    curScale+=(ts2-curScale)*S.zoomSmooth*0.3;curX+=(tx2-curX)*Math.max(S.zoomSmooth*5,0.08);curY+=(ty2-curY)*Math.max(S.zoomSmooth*5,0.08);
+    const ms2=video.currentTime*1000;
+    const zT2=computeZoomTarget(ms2);
+    startZoomTransition(ms2, zT2.scale, zT2.x, zT2.y);
+    applyZoomTransition(ms2);
     const sc2=curScale,sw2=vw/sc2,sh2=vh/sc2;let sx2=curX*vw-sw2/2,sy2=curY*vh-sh2/2;sx2=Math.max(0,Math.min(vw-sw2,sx2));sy2=Math.max(0,Math.min(vh-sh2,sy2));
-    oc.clearRect(0,0,vw,vh);oc.filter=`brightness(${S.brightness}) contrast(${S.contrast}) saturate(${S.saturate})`;oc.drawImage(video,sx2,sy2,sw2,sh2,0,0,vw,vh);oc.filter='none';
+    oc.clearRect(0,0,vw,vh);
+    // Apply combined filter (manual + preset)
+    const efp=filterPresets[activeFilter]||filterPresets.none;
+    const eB=S.brightness*efp.brightness,eC=S.contrast*efp.contrast,eSa=S.saturate*efp.saturate;
+    let efs=`brightness(${eB}) contrast(${eC}) saturate(${eSa})`;
+    if(efp.hueRotate)efs+=` hue-rotate(${efp.hueRotate}deg)`;
+    if(efp.sepia)efs+=` sepia(${efp.sepia})`;
+    if(FX.blur>0)efs+=` blur(${FX.blur}px)`;
+    oc.filter=efs;oc.drawImage(video,sx2,sy2,sw2,sh2,0,0,vw,vh);oc.filter='none';
+    // Filter overlay
+    if(efp.overlay){oc.fillStyle=efp.overlay;oc.fillRect(0,0,vw,vh);}
+    // Temperature
+    if(FX.temperature!==0){oc.fillStyle=FX.temperature>0?`rgba(255,140,0,${Math.abs(FX.temperature)/400})`:`rgba(0,100,255,${Math.abs(FX.temperature)/400})`;oc.fillRect(0,0,vw,vh);}
+    // Tint
+    if(FX.tint!==0){oc.fillStyle=FX.tint>0?`rgba(200,0,200,${Math.abs(FX.tint)/500})`:`rgba(0,200,0,${Math.abs(FX.tint)/500})`;oc.fillRect(0,0,vw,vh);}
+    // Highlights/Shadows
+    if(FX.highlights>0){oc.fillStyle=`rgba(255,255,255,${FX.highlights/500})`;oc.fillRect(0,0,vw,vh);}
+    else if(FX.highlights<0){oc.fillStyle=`rgba(0,0,0,${Math.abs(FX.highlights)/500})`;oc.fillRect(0,0,vw,vh);}
+    if(FX.shadows<0){oc.fillStyle=`rgba(0,0,0,${Math.abs(FX.shadows)/400})`;oc.fillRect(0,0,vw,vh);}
+    // Fade
+    if(FX.fadeAmount>0){oc.fillStyle=`rgba(128,128,128,${FX.fadeAmount/200})`;oc.fillRect(0,0,vw,vh);}
+    // Vignette
+    if(FX.vignette>0){const evcx=vw/2,evcy=vh/2,evr=Math.max(vw,vh)*0.7;const evg=oc.createRadialGradient(evcx,evcy,evr*0.3,evcx,evcy,evr);evg.addColorStop(0,'rgba(0,0,0,0)');evg.addColorStop(1,`rgba(0,0,0,${FX.vignette/100})`);oc.fillStyle=evg;oc.fillRect(0,0,vw,vh);}
+    // Scanlines
+    if(FX.scanlines){oc.fillStyle='rgba(0,0,0,0.12)';for(let esy=0;esy<vh;esy+=3)oc.fillRect(0,esy,vw,1);}
+    // Grain in export
+    if(FX.grain>0){if(!grainCanvas){grainCanvas=document.createElement('canvas');grainCtx=grainCanvas.getContext('2d');}grainCanvas.width=vw/2;grainCanvas.height=vh/2;const egd=grainCtx.createImageData(grainCanvas.width,grainCanvas.height);const edd=egd.data;for(let ei=0;ei<edd.length;ei+=4){const ev=Math.random()*255;edd[ei]=edd[ei+1]=edd[ei+2]=ev;edd[ei+3]=255;}grainCtx.putImageData(egd,0,0);oc.save();oc.globalAlpha=FX.grain/300;oc.globalCompositeOperation='overlay';oc.drawImage(grainCanvas,0,0,vw,vh);oc.globalCompositeOperation='source-over';oc.restore();}
     // Highlight effect in export
     if(S.highlight&&sc2>1.05&&cursorPositions.length>0){
       const hx=((curX*vw-sx2)/sw2)*vw,hy=((curY*vh-sy2)/sh2)*vh;
@@ -2398,6 +4377,23 @@ async function doExport(){
         oc.beginPath();oc.moveTo(0,0);oc.lineTo(0,cs2*1.4);oc.lineTo(cs2*0.35,cs2*1.05);oc.lineTo(cs2*0.75,cs2*1.65);oc.lineTo(cs2*0.95,cs2*1.5);oc.lineTo(cs2*0.55,cs2*0.9);oc.lineTo(cs2*1.0,cs2*0.85);oc.closePath();
         oc.shadowColor='rgba(0,0,0,0.4)';oc.shadowBlur=6;oc.shadowOffsetX=2;oc.shadowOffsetY=2;
         oc.fillStyle='#fff';oc.fill();oc.shadowBlur=0;oc.strokeStyle='#000';oc.lineWidth=cs2*0.07;oc.stroke();oc.restore();
+      }
+      // Click ripple in export
+      if (!scriptMode && cursorClicks.length > 0) {
+        for (const ck of cursorClicks) {
+          const elapsed = ms2 - ck.t;
+          if (elapsed >= 0 && elapsed < 500) {
+            const ckx = ((ck.x * vw - sx2) / sw2) * vw;
+            const cky = ((ck.y * vh - sy2) / sh2) * vh;
+            if (ckx >= 0 && ckx <= vw && cky >= 0 && cky <= vh) {
+              const rp = elapsed / 500;
+              oc.beginPath(); oc.arc(ckx, cky, 60 * rp * S.cursorSize, 0, Math.PI * 2);
+              oc.strokeStyle = `rgba(124,111,245,${(1 - rp) * 0.7})`; oc.lineWidth = 4; oc.stroke();
+              oc.beginPath(); oc.arc(ckx, cky, 30 * rp * S.cursorSize, 0, Math.PI * 2);
+              oc.strokeStyle = `rgba(167,139,250,${(1 - rp) * 0.5})`; oc.lineWidth = 2; oc.stroke();
+            }
+          }
+        }
       }
     }
     // Webcam in export
@@ -2478,7 +4474,7 @@ async function doExportGif(){
   st.textContent = `프레임 캡처 중... 0/${totalFrames}`;
 
   // Reset zoom state
-  curX = 0.5; curY = 0.5; curScale = 1;
+  curX = 0.5; curY = 0.5; curScale = 1; zoomTransition.active = false;
 
   for (let i = 0; i < totalFrames; i++) {
     const t = trimStart + (i / gifFps);
@@ -2489,23 +4485,24 @@ async function doExportGif(){
 
     // Update zoom state
     const ms = t * 1000;
-    let ts=1,tx=0.5,ty=0.5;
-    if(S.autoZoom&&cursorPositions.length>0){
-      const c=getCursorAt(ms);tx=c.x;ty=c.y;
-      ts=cursorMoving(ms)?S.zoomLevel:1;
-    }
-    curScale+=(ts-curScale)*S.zoomSmooth*0.3*3; // faster convergence for export
-    curX+=(tx-curX)*Math.max(S.zoomSmooth*5,0.08)*3;
-    curY+=(ty-curY)*Math.max(S.zoomSmooth*5,0.08)*3;
+    const zTg=computeZoomTarget(ms);
+    startZoomTransition(ms, zTg.scale, zTg.x, zTg.y);
+    applyZoomTransition(ms);
 
     const sc=curScale,sW=vw/sc,sH=vh/sc;
     let sX=curX*vw-sW/2,sY=curY*vh-sH/2;
     sX=Math.max(0,Math.min(vw-sW,sX));sY=Math.max(0,Math.min(vh-sH,sY));
 
     oc.clearRect(0,0,gw,gh);
-    oc.filter=`brightness(${S.brightness}) contrast(${S.contrast}) saturate(${S.saturate})`;
-    oc.drawImage(video,sX,sY,sW,sH,0,0,gw,gh);
-    oc.filter='none';
+    const gfp=filterPresets[activeFilter]||filterPresets.none;
+    let gfs=`brightness(${S.brightness*gfp.brightness}) contrast(${S.contrast*gfp.contrast}) saturate(${S.saturate*gfp.saturate})`;
+    if(gfp.hueRotate)gfs+=` hue-rotate(${gfp.hueRotate}deg)`;
+    if(gfp.sepia)gfs+=` sepia(${gfp.sepia})`;
+    oc.filter=gfs;oc.drawImage(video,sX,sY,sW,sH,0,0,gw,gh);oc.filter='none';
+    if(gfp.overlay){oc.fillStyle=gfp.overlay;oc.fillRect(0,0,gw,gh);}
+    if(FX.temperature!==0){oc.fillStyle=FX.temperature>0?`rgba(255,140,0,${Math.abs(FX.temperature)/400})`:`rgba(0,100,255,${Math.abs(FX.temperature)/400})`;oc.fillRect(0,0,gw,gh);}
+    if(FX.vignette>0){const gvcx=gw/2,gvcy=gh/2,gvr=Math.max(gw,gh)*0.7;const gvg=oc.createRadialGradient(gvcx,gvcy,gvr*0.3,gvcx,gvcy,gvr);gvg.addColorStop(0,'rgba(0,0,0,0)');gvg.addColorStop(1,`rgba(0,0,0,${FX.vignette/100})`);oc.fillStyle=gvg;oc.fillRect(0,0,gw,gh);}
+    if(FX.fadeAmount>0){oc.fillStyle=`rgba(128,128,128,${FX.fadeAmount/200})`;oc.fillRect(0,0,gw,gh);}
 
     // Highlight effect in GIF export
     if(S.highlight&&sc>1.05&&cursorPositions.length>0){

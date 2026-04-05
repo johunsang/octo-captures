@@ -1,6 +1,6 @@
 {
   "name": "octo-captures",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Screen recording & editing app with auto-zoom, cursor tracking, and timeline editing",
   "main": "main.js",
   "scripts": {
@@ -9,9 +9,7 @@
     "build": "electron-builder --mac",
     "build:dmg": "electron-builder --mac dmg",
     "build:zip": "electron-builder --mac zip",
-    "build:win": "electron-builder --win",
-    "build:linux": "electron-builder --linux",
-    "build:all": "electron-builder --mac --win --linux"
+    "build:all": "electron-builder --mac"
   },
   "author": "johunsang",
   "license": "MIT",
@@ -22,33 +20,21 @@
       "category": "public.app-category.video",
       "icon": "icon.icns",
       "target": [
-        { "target": "dmg", "arch": ["universal"] },
-        { "target": "zip", "arch": ["universal"] }
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "universal"
+          ]
+        }
       ],
       "identity": "hunsang jo (AZ55QRXUCH)",
       "notarize": true
-    },
-    "win": {
-      "icon": "icon.png",
-      "target": [
-        { "target": "nsis", "arch": ["x64", "arm64"] },
-        { "target": "portable", "arch": ["x64"] }
-      ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "installerIcon": "icon.png",
-      "uninstallerIcon": "icon.png",
-      "installerHeaderIcon": "icon.png"
-    },
-    "linux": {
-      "icon": "icon.png",
-      "category": "Video",
-      "target": [
-        { "target": "AppImage", "arch": ["x64", "arm64"] },
-        { "target": "deb", "arch": ["x64"] }
-      ]
     },
     "files": [
       "main.js",
@@ -64,7 +50,7 @@
     }
   },
   "devDependencies": {
-    "electron": "^41.0.2",
+    "electron": "^33.4.11",
     "electron-builder": "^26.8.1"
   },
   "dependencies": {
